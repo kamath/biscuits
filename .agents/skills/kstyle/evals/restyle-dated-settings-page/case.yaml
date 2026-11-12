@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: restyle-dated-settings-page
+expected_outcome: |
+  SettingsPage.tsx keeps the same features (profile name/email edit, notification toggles, delete account) but is
+  rebuilt in the house style: Base UI controls (Field, Switch, Button, AlertDialog for delete), no borders, pastel
+  tokens, TanStack Query instead of useEffect fetching, shared state not prop-drilled, every action with a key and
+  a visible hint, and loading/error states shown.
+context:
+  scaffold_script: place-files.sh

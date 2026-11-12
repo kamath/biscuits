@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: api-keys-page-from-scratch
+expected_outcome: |
+  A React page under src/keys-page/ that lists API keys, creates one (showing and copying the one-time secret)
+  and revokes one, built in the house style: Base UI components, pastel tokens with no borders, a vim-style
+  keyboard model (j/k list navigation, single-key actions with visible hints, a ⌘K / : command palette),
+  Jotai for shared UI state, TanStack Query for the API with loading, error, empty and data states all shown.

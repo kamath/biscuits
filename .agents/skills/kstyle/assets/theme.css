@@ -1,0 +1,178 @@
+/* Tailwind v4 theme for the kstyle skill. Import it once as the app's stylesheet.
+   The theme replaces Tailwind's defaults instead of extending them: the only colors are the tokens below, and
+   there are no radius or shadow scales, so `bg-white`, `rounded-md` and `shadow-md` don't exist. Off-system
+   styling then fails to compile into anything rather than quietly shipping. */
+@import "tailwindcss";
+
+/* Neutrals are warm beige (light) or warm near-black (dark) and carry the structure.
+   Color arrives as splashes from distinct pastel hues; each hue has one job and means it everywhere. */
+:root {
+  --page: #f3ede2;
+  --bar: #e4dac8;
+  --pane: #ebe3d4;
+  --raised: #fbf8f2;
+  --well: #e0d6c3;
+  --hover: #e2d8c5;
+  --ink: #2b2620;
+  --muted: #6f665a;
+
+  /* Hues: a fill and the ink that reads on it. */
+  --lavender: #d9ccf5;
+  --lavender-ink: #34265e;
+  --sky: #c4def4;
+  --sky-ink: #173e5e;
+  --mint: #c5e8d3;
+  --mint-ink: #1d5236;
+  --butter: #f3e2a2;
+  --butter-ink: #5a460e;
+  --rose: #f4c4cd;
+  --rose-ink: #7a2133;
+  --peach: #f7cfb8;
+  --peach-ink: #6b3112;
+
+  --scrim: rgb(43 38 32 / 0.3);
+  --lift: 0 24px 64px -16px rgb(43 38 32 / 0.3);
+  color-scheme: light dark;
+}
+:root {
+  --wash: color-mix(in oklab, var(--lavender) 12%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #1b1814;
+    --bar: #15130f;
+    --pane: #23201a;
+    --raised: #2c2720;
+    --well: #3a332a;
+    --hover: #353027;
+    --ink: #efe8dc;
+    --muted: #a89d8c;
+
+    --lavender: #463b68;
+    --lavender-ink: #ddd0fb;
+    --sky: #1f3c53;
+    --sky-ink: #c3e0f7;
+    --mint: #22463a;
+    --mint-ink: #bdebd3;
+    --butter: #4a3f22;
+    --butter-ink: #f3e2a6;
+    --rose: #4f2a33;
+    --rose-ink: #f6c3cd;
+    --peach: #51331f;
+    --peach-ink: #f7cfb6;
+
+    --scrim: rgb(0 0 0 / 0.55);
+    --lift: 0 24px 64px -16px rgb(0 0 0 / 0.7);
+  }
+}
+
+@theme {
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Utilities are named for jobs, not hues: `bg-sel`, `bg-primary`, `text-danger-ink`. Reach for a raw hue
+   (`bg-peach`) only when giving it a new job, and then add the job here. */
+@theme inline {
+  --color-page: var(--page);
+  --color-bar: var(--bar);
+  --color-pane: var(--pane);
+  --color-raised: var(--raised);
+  --color-well: var(--well);
+  --color-hover: var(--hover);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-scrim: var(--scrim);
+  --color-peach: var(--peach);
+  --color-peach-ink: var(--peach-ink);
+
+  --color-sel: var(--lavender);
+  --color-sel-ink: var(--lavender-ink);
+  --color-primary: var(--sky);
+  --color-primary-ink: var(--sky-ink);
+  --color-primary-hover: color-mix(in oklab, var(--sky), var(--sky-ink) 10%);
+  --color-ok: var(--mint);
+  --color-ok-ink: var(--mint-ink);
+  --color-pending: var(--butter);
+  --color-pending-ink: var(--butter-ink);
+  --color-danger: var(--rose);
+  --color-danger-ink: var(--rose-ink);
+  --color-danger-hover: color-mix(in oklab, var(--rose), var(--rose-ink) 10%);
+
+  --shadow-lift: var(--lift);
+}
+
+/* The focused pane's selection wash, layered over whatever neutral the pane has: `data-focused:wash`. */
+@utility wash {
+  background-image: linear-gradient(var(--wash), var(--wash));
+}
+
+@layer base {
+  /* The app fills the viewport and the page never scrolls; regions with overflowing content scroll themselves
+     (give each `overflow-auto overscroll-none`). No rubber-band bounce (iOS) or scroll chaining. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  /* The dynamic viewport, so mobile browser bars never cover the bottom of the app. */
+  html {
+    height: 100dvh;
+  }
+  /* 16px text in fields on touch screens: anything smaller makes iOS zoom the page on focus. */
+  @media (pointer: coarse) {
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
+  /* The app is its own stacking context, so nothing in it (a sticky header with a z-index) can paint over the
+     dialogs, palette and toasts that Base UI portals to <body>. */
+  #root {
+    isolation: isolate;
+  }
+  html {
+    font: 14px/1.45 var(--font-sans);
+  }
+  body {
+    background: var(--page);
+    color: var(--ink);
+  }
+  h1 {
+    font-size: 1.4rem;
+    line-height: 1.25;
+  }
+  h2 {
+    font-size: 1.05rem;
+    line-height: 1.3;
+  }
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+  code,
+  pre {
+    font-size: 0.9em;
+  }
+  :focus {
+    outline: none;
+  }
+  /* Key hints take their tint from the text around them, so they read on any fill in either mode. */
+  kbd {
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1;
+    min-width: 1.6em;
+    padding: 3px 5px;
+    text-align: center;
+    background: color-mix(in oklab, currentColor 12%, transparent);
+  }
+}

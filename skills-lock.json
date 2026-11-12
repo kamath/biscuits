@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "skills": {
+    "kstyle": {
+      "source": "kamath/kstyle",
+      "sourceType": "github",
+      "skillPath": "skills/kstyle/SKILL.md",
+      "computedHash": "52882ccd945c8d25c47e7df755463ace30ebf298b2321c2175ce7b9eff6fed92"
+    }
+  }
+}

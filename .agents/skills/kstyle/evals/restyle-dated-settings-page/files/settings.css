@@ -1,0 +1,9 @@
+.settings { max-width: 640px; margin: 40px auto; font-family: Arial, sans-serif; }
+.subtitle { color: #666; }
+.box { border: 1px solid #ccc; border-radius: 4px; padding: 16px; margin: 16px 0; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.box.danger { border-color: #e33; }
+label { display: block; margin: 8px 0; }
+input { border: 1px solid #999; padding: 4px; }
+button { border: 1px solid #333; background: #eee; padding: 6px 12px; }
+button.red { background: #e33; color: white; border-color: #a00; }
+.hint { font-size: 12px; color: #888; }
