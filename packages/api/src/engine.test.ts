@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { attenuate, authorize, mint } from "./biscuit.ts";
+import { attenuate, authorize as run, mint, type Verdict } from "./biscuit.ts";
 import { apps, grants } from "./catalog.ts";
 import { parse, parseGrant, parseQualified, qualify, type AppSpec } from "./grammar.ts";
+
+/** The verdict without its trace and facts, which have their own test. */
+const authorize = async (...a: Parameters<typeof run>) => {
+  const v: Verdict = await run(...a);
+  if (v.verdict === "invalid") return v;
+  const { trace: _t, facts: _f, ...core } = v;
+  return core;
+};
 
 const bank = apps.find((a) => a.id === "bank")!;
 const mail = apps.find((a) => a.id === "mail")!;
@@ -133,4 +141,36 @@ test("an app whose name extends another's is told apart", async () => {
   const { token, publicKey } = await mint([bank, second], ["On Harbor Bank 2, it may view balances"]);
   assert.equal((await authorize([bank, second], token, publicKey, "bank", "view_balance", {})).verdict, "denied");
   assert.equal((await authorize([bank, second], token, publicKey, "bank2", "view_balance", {})).verdict, "allowed");
+});
+
+test("the trace says how every line bore on the request", async () => {
+  const parent = await mint(both, lines("pay-rent", "team-mail"));
+  const { token } = await attenuate(both, parent.token, parent.publicKey, ["Only before 2999-01-01"]);
+  const v = await run(both, token, parent.publicKey, "bank", "send_payment", { payee: "mallory", amount: "1500" });
+  assert.equal(v.verdict, "denied");
+  if (v.verdict !== "denied") return;
+  assert.deepEqual(
+    v.trace.map((l) => [l.block, l.status, l.sentence]),
+    [
+      [0, "unrelated", "On Harbor Bank, it may view balances"],
+      [0, "permits", "On Harbor Bank, it may send payments"],
+      [0, "violated", 'On Harbor Bank, only send payments where payee is "landlord"'],
+      [0, "holds", "On Harbor Bank, only send payments where amount is at most 2000"],
+      [0, "unrelated", "On Quill Mail, it may read messages"],
+      [0, "unrelated", 'On Quill Mail, only read messages where sender ends with "@example.com"'],
+      [1, "holds", "Only before 2999-01-01"],
+    ],
+  );
+  assert.deepEqual(v.facts.slice(0, 2), ['app("bank")', 'action("send_payment")']);
+  assert.ok(v.trace.every((l) => l.datalog.endsWith(";")));
+});
+
+test("the preset requests and tokens refer to real apps, actions and grants", async () => {
+  const { requests, tokens } = await import("./catalog.ts");
+  for (const r of requests) {
+    const action = apps.find((a) => a.id === r.app)?.actions.find((a) => a.id === r.action);
+    assert.ok(action, r.id);
+    for (const name of Object.keys(r.args)) assert.ok(action.params.some((p) => p.name === name), `${r.id}.${name}`);
+  }
+  for (const t of tokens) for (const id of t.grantIds) assert.ok(grants.some((g) => g.id === id), `${t.id}: ${id}`);
 });

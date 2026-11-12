@@ -16,16 +16,24 @@ async function ok<T>(response: Promise<Response>): Promise<T> {
 type In<F> = InferRequestType<F> extends { json: infer J } ? J : never;
 type Out<F> = InferResponseType<F, 200>;
 type List = Routes["apps"]["$get"];
+type GetEstimates = Routes["ai"]["estimates"]["$get"];
 type Generate = Routes["apps"]["$post"];
-type Draft = Routes["grants"]["draft"]["$post"];
+type DraftGrant = Routes["grants"]["draft"]["$post"];
+type DraftToken = Routes["tokens"]["draft"]["$post"];
+type DraftRequest = Routes["requests"]["draft"]["$post"];
 type Mint = Routes["tokens"]["$post"];
 type Attenuate = Routes["tokens"]["attenuate"]["$post"];
 type Send = Routes["requests"]["$post"];
 
+export type Estimates = Out<GetEstimates>;
+
 export const api = {
   listApps: () => ok<Out<List>>(routes().apps.$get()),
+  estimateCosts: () => ok<Estimates>(routes().ai.estimates.$get()),
   generateApp: (json: In<Generate>) => ok<Out<Generate>>(routes().apps.$post({ json })),
-  draftGrant: (json: In<Draft>) => ok<Out<Draft>>(routes().grants.draft.$post({ json })),
+  draftGrant: (json: In<DraftGrant>) => ok<Out<DraftGrant>>(routes().grants.draft.$post({ json })),
+  draftToken: (json: In<DraftToken>) => ok<Out<DraftToken>>(routes().tokens.draft.$post({ json })),
+  draftRequest: (json: In<DraftRequest>) => ok<Out<DraftRequest>>(routes().requests.draft.$post({ json })),
   mintToken: (json: In<Mint>) => ok<Out<Mint>>(routes().tokens.$post({ json })),
   attenuateToken: (json: In<Attenuate>) => ok<Out<Attenuate>>(routes().tokens.attenuate.$post({ json })),
   sendRequest: (json: In<Send>) => ok<Out<Send>>(routes().requests.$post({ json })),

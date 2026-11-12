@@ -71,9 +71,18 @@ export async function attenuate(specs: AppSpec[], token: string, publicKey: stri
   return { token: parsed.appendBlock(builder).toBase64() };
 }
 
+/** How one line of the token bore on one request. */
+export type TraceLine = {
+  block: number;
+  sentence: string;
+  datalog: string;
+  /** permits: the right that let it through. holds: a restriction it met. unrelated: about another app or action. */
+  status: "permits" | "holds" | "violated" | "unrelated";
+};
+
 export type Verdict =
-  | { verdict: "allowed"; by: string }
-  | { verdict: "denied"; violated: { block: number; sentence: string }[]; unpermitted: boolean }
+  | { verdict: "allowed"; by: string; facts: string[]; trace: TraceLine[] }
+  | { verdict: "denied"; violated: { block: number; sentence: string }[]; unpermitted: boolean; facts: string[]; trace: TraceLine[] }
   | { verdict: "invalid"; reason: string };
 
 /**
@@ -132,22 +141,39 @@ export async function authorize(
   // The whole policy: a request passes if the token holds a right for its app and action. Rights only count
   // from the first block, which Biscuit enforces by not trusting facts from appended ones.
   authorizer.addCode(`${facts.join(";\n")};\nallow if app($p), action($a), right($p, $a);\ndeny if true;`);
+  // Which lines apply is read off the lines themselves; which of those fail is Biscuit's call alone.
+  const trace = (failed: { block_id: number; check_id: number }[]): TraceLine[] =>
+    blocks.flatMap((lines, block) => {
+      let check = -1;
+      return lines.map((l): TraceLine => {
+        const line = l.line;
+        const base = { block, sentence: l.text, datalog: `${l.datalog};` };
+        if (line.kind === "may") return { ...base, status: line.app === spec.id && line.action === action.id ? "permits" : "unrelated" };
+        check++;
+        const about = line.kind === "app" || line.app === null || (line.app === spec.id && (line.kind === "before" || line.action === action.id));
+        if (failed.some((f) => f.block_id === block && f.check_id === check)) return { ...base, status: "violated" };
+        return { ...base, status: about ? "holds" : "unrelated" };
+      });
+    });
+
   try {
     // Biscuit's default budget is 1ms of evaluation, which a cold start can exceed; these policies are tiny, so
     // a generous ceiling costs nothing.
     authorizer.buildAuthenticated(biscuit).authorizeWithLimits({ max_facts: 1000, max_iterations: 100, max_time_micro: 1_000_000 });
     const by = blocks[0]!.find((l) => l.line.kind === "may" && l.line.app === spec.id && l.line.action === action.id);
-    return { verdict: "allowed", by: by?.text ?? "" };
+    return { verdict: "allowed", by: by?.text ?? "", facts, trace: trace([]) };
   } catch (e) {
     const failure = (e as { FailedLogic?: { Unauthorized?: { policy: { Allow?: number; Deny?: number }; checks: { Block?: { block_id: number; check_id: number } }[] } } })
       .FailedLogic?.Unauthorized;
     if (!failure) throw new Error(`Biscuit couldn't evaluate the request: ${message(e)}`);
-    const violated = failure.checks.flatMap((c) => {
-      if (!c.Block) return [];
-      // Checks keep the order of the lines that produced them.
-      const line = blocks[c.Block.block_id]?.filter((l) => l.line.kind !== "may")[c.Block.check_id];
-      return line ? [{ block: c.Block.block_id, sentence: line.text }] : [];
-    });
-    return { verdict: "denied", violated, unpermitted: failure.policy.Deny !== undefined };
+    const failed = failure.checks.flatMap((c) => (c.Block ? [c.Block] : []));
+    const lines = trace(failed);
+    return {
+      verdict: "denied",
+      violated: lines.filter((l) => l.status === "violated").map((l) => ({ block: l.block, sentence: l.sentence })),
+      unpermitted: failure.policy.Deny !== undefined,
+      facts,
+      trace: lines,
+    };
   }
 }

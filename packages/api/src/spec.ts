@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { AppSpec, Line, Op } from "./grammar.ts";
 
+export type AgentRequest = { app: string; action: string; args: Record<string, string> };
+
 // Schemas the model fills in. Flat and fully required, so strict structured output accepts them; the
 // sanitizers below do the real validation.
 
@@ -63,7 +65,8 @@ export const grantDraftSchema = z.object({
   lines: z.array(
     z.object({
       kind: z.enum(["may", "where", "before"]),
-      action: z.string().describe("An action id from the app. Empty for kind=before."),
+      app: z.string().describe("The id of the app this line is about."),
+      action: z.string().describe("An action id from that app. Empty for kind=before."),
       param: z.string().describe("A parameter name of that action. Empty unless kind=where."),
       op: z.enum(["is", "starts_with", "ends_with", "at_most", "at_least", "none"]).describe("none unless kind=where"),
       value: z.string().describe("The value to compare with, as text. Empty unless kind=where."),
@@ -74,11 +77,17 @@ export const grantDraftSchema = z.object({
 });
 export type GrantDraft = z.infer<typeof grantDraftSchema>;
 
-/** Keeps the model's lines that are valid for this app; the rest are reported, not repaired. */
-export function toLines(draft: GrantDraft, spec: AppSpec): { lines: Line[]; dropped: string[] } {
+/** Keeps the model's lines that are valid for these apps; the rest are reported, not repaired. */
+export function toLines(draft: GrantDraft, specs: AppSpec[]): { lines: Line[]; dropped: string[] } {
   const lines: Line[] = [];
   const dropped: string[] = [];
-  for (const l of draft.lines.slice(0, 24)) {
+  const only = specs.length === 1 ? specs[0] : undefined;
+  for (const l of draft.lines.slice(0, 40)) {
+    const spec = specs.find((a) => a.id === l.app) ?? only;
+    if (!spec) {
+      dropped.push(`something about "${clean(l.app, 40)}", which isn't one of the apps`);
+      continue;
+    }
     if (l.kind === "before") {
       if (/^\d{4}-\d{2}-\d{2}$/.test(l.date)) lines.push({ kind: "before", app: spec.id, date: l.date });
       else dropped.push(`a time limit with no usable date`);
@@ -108,4 +117,26 @@ export function toLines(draft: GrantDraft, spec: AppSpec): { lines: Line[]; drop
     }
   }
   return { lines, dropped };
+}
+
+export const requestDraftSchema = z.object({
+  matched: z.boolean().describe("false when no action of any app fits what the user described"),
+  app: z.string().describe("The app id. Empty when matched is false."),
+  action: z.string().describe("An action id from that app. Empty when matched is false."),
+  args: z.array(z.object({ name: z.string().describe("A parameter name of the action"), value: z.string().describe("Its value, as text") })),
+  note: z.string().describe("When matched is false, a few words on why. Otherwise empty."),
+});
+export type RequestDraft = z.infer<typeof requestDraftSchema>;
+
+/** The request the model picked, if it names a real action; arguments it invented for unknown parameters are dropped. */
+export function toRequest(draft: RequestDraft, specs: AppSpec[]): { request: AgentRequest | null; note: string } {
+  const spec = specs.find((a) => a.id === draft.app);
+  const action = spec?.actions.find((a) => a.id === draft.action);
+  if (!draft.matched || !spec || !action) return { request: null, note: clean(draft.note, 160) || "None of the apps has an action for that." };
+  const args: Record<string, string> = {};
+  for (const p of action.params) {
+    const given = draft.args.find((a) => a.name === p.name);
+    if (given) args[p.name] = clean(given.value, 120);
+  }
+  return { request: { app: spec.id, action: action.id, args }, note: "" };
 }

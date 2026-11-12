@@ -15,9 +15,10 @@ import { Route as TokensRouteImport } from './routes/tokens'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as AppsAppIdRouteImport } from './routes/apps.$appId'
 import { Route as TokensTokenIdRouteImport } from './routes/tokens.$tokenId'
+import { Route as TryRequestIdRouteImport } from './routes/try.$requestId'
+import { Route as TryRequestIdTokenIdRouteImport } from './routes/try.$requestId.$tokenId'
 import { Route as AppsAppIdActionsActionIdRouteImport } from './routes/apps.$appId.actions.$actionId'
 import { Route as AppsAppIdGrantsGrantIdRouteImport } from './routes/apps.$appId.grants.$grantId'
-import { Route as TokensTokenIdAppIdActionIdRouteImport } from './routes/tokens.$tokenId.$appId.$actionId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -49,6 +50,16 @@ const TokensTokenIdRoute = TokensTokenIdRouteImport.update({
   path: '/$tokenId',
   getParentRoute: () => TokensRoute,
 } as any)
+const TryRequestIdRoute = TryRequestIdRouteImport.update({
+  id: '/try/$requestId',
+  path: '/try/$requestId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TryRequestIdTokenIdRoute = TryRequestIdTokenIdRouteImport.update({
+  id: '/$tokenId',
+  path: '/$tokenId',
+  getParentRoute: () => TryRequestIdRoute,
+} as any)
 const AppsAppIdActionsActionIdRoute =
   AppsAppIdActionsActionIdRouteImport.update({
     id: '/actions/$actionId',
@@ -60,12 +71,6 @@ const AppsAppIdGrantsGrantIdRoute = AppsAppIdGrantsGrantIdRouteImport.update({
   path: '/grants/$grantId',
   getParentRoute: () => AppsAppIdRoute,
 } as any)
-const TokensTokenIdAppIdActionIdRoute =
-  TokensTokenIdAppIdActionIdRouteImport.update({
-    id: '/$appId/$actionId',
-    path: '/$appId/$actionId',
-    getParentRoute: () => TokensTokenIdRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,10 +78,11 @@ export interface FileRoutesByFullPath {
   '/tokens': typeof TokensRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRouteWithChildren
-  '/tokens/$tokenId': typeof TokensTokenIdRouteWithChildren
+  '/tokens/$tokenId': typeof TokensTokenIdRoute
+  '/try/$requestId': typeof TryRequestIdRouteWithChildren
+  '/try/$requestId/$tokenId': typeof TryRequestIdTokenIdRoute
   '/apps/$appId/actions/$actionId': typeof AppsAppIdActionsActionIdRoute
   '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRoute
-  '/tokens/$tokenId/$appId/$actionId': typeof TokensTokenIdAppIdActionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -84,10 +90,11 @@ export interface FileRoutesByTo {
   '/tokens': typeof TokensRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRouteWithChildren
-  '/tokens/$tokenId': typeof TokensTokenIdRouteWithChildren
+  '/tokens/$tokenId': typeof TokensTokenIdRoute
+  '/try/$requestId': typeof TryRequestIdRouteWithChildren
+  '/try/$requestId/$tokenId': typeof TryRequestIdTokenIdRoute
   '/apps/$appId/actions/$actionId': typeof AppsAppIdActionsActionIdRoute
   '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRoute
-  '/tokens/$tokenId/$appId/$actionId': typeof TokensTokenIdAppIdActionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -96,10 +103,11 @@ export interface FileRoutesById {
   '/tokens': typeof TokensRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRouteWithChildren
-  '/tokens/$tokenId': typeof TokensTokenIdRouteWithChildren
+  '/tokens/$tokenId': typeof TokensTokenIdRoute
+  '/try/$requestId': typeof TryRequestIdRouteWithChildren
+  '/try/$requestId/$tokenId': typeof TryRequestIdTokenIdRoute
   '/apps/$appId/actions/$actionId': typeof AppsAppIdActionsActionIdRoute
   '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRoute
-  '/tokens/$tokenId/$appId/$actionId': typeof TokensTokenIdAppIdActionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -110,9 +118,10 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/apps/$appId'
     | '/tokens/$tokenId'
+    | '/try/$requestId'
+    | '/try/$requestId/$tokenId'
     | '/apps/$appId/actions/$actionId'
     | '/apps/$appId/grants/$grantId'
-    | '/tokens/$tokenId/$appId/$actionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -121,9 +130,10 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/apps/$appId'
     | '/tokens/$tokenId'
+    | '/try/$requestId'
+    | '/try/$requestId/$tokenId'
     | '/apps/$appId/actions/$actionId'
     | '/apps/$appId/grants/$grantId'
-    | '/tokens/$tokenId/$appId/$actionId'
   id:
     | '__root__'
     | '/'
@@ -132,9 +142,10 @@ export interface FileRouteTypes {
     | '/api/$'
     | '/apps/$appId'
     | '/tokens/$tokenId'
+    | '/try/$requestId'
+    | '/try/$requestId/$tokenId'
     | '/apps/$appId/actions/$actionId'
     | '/apps/$appId/grants/$grantId'
-    | '/tokens/$tokenId/$appId/$actionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -142,6 +153,7 @@ export interface RootRouteChildren {
   AppsRoute: typeof AppsRouteWithChildren
   TokensRoute: typeof TokensRouteWithChildren
   ApiSplatRoute: typeof ApiSplatRoute
+  TryRequestIdRoute: typeof TryRequestIdRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -188,6 +200,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TokensTokenIdRouteImport
       parentRoute: typeof TokensRoute
     }
+    '/try/$requestId': {
+      id: '/try/$requestId'
+      path: '/try/$requestId'
+      fullPath: '/try/$requestId'
+      preLoaderRoute: typeof TryRequestIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/try/$requestId/$tokenId': {
+      id: '/try/$requestId/$tokenId'
+      path: '/$tokenId'
+      fullPath: '/try/$requestId/$tokenId'
+      preLoaderRoute: typeof TryRequestIdTokenIdRouteImport
+      parentRoute: typeof TryRequestIdRoute
+    }
     '/apps/$appId/actions/$actionId': {
       id: '/apps/$appId/actions/$actionId'
       path: '/actions/$actionId'
@@ -201,13 +227,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/apps/$appId/grants/$grantId'
       preLoaderRoute: typeof AppsAppIdGrantsGrantIdRouteImport
       parentRoute: typeof AppsAppIdRoute
-    }
-    '/tokens/$tokenId/$appId/$actionId': {
-      id: '/tokens/$tokenId/$appId/$actionId'
-      path: '/$appId/$actionId'
-      fullPath: '/tokens/$tokenId/$appId/$actionId'
-      preLoaderRoute: typeof TokensTokenIdAppIdActionIdRouteImport
-      parentRoute: typeof TokensTokenIdRoute
     }
   }
 }
@@ -236,34 +255,35 @@ const AppsRouteChildren: AppsRouteChildren = {
 
 const AppsRouteWithChildren = AppsRoute._addFileChildren(AppsRouteChildren)
 
-interface TokensTokenIdRouteChildren {
-  TokensTokenIdAppIdActionIdRoute: typeof TokensTokenIdAppIdActionIdRoute
-}
-
-const TokensTokenIdRouteChildren: TokensTokenIdRouteChildren = {
-  TokensTokenIdAppIdActionIdRoute: TokensTokenIdAppIdActionIdRoute,
-}
-
-const TokensTokenIdRouteWithChildren = TokensTokenIdRoute._addFileChildren(
-  TokensTokenIdRouteChildren,
-)
-
 interface TokensRouteChildren {
-  TokensTokenIdRoute: typeof TokensTokenIdRouteWithChildren
+  TokensTokenIdRoute: typeof TokensTokenIdRoute
 }
 
 const TokensRouteChildren: TokensRouteChildren = {
-  TokensTokenIdRoute: TokensTokenIdRouteWithChildren,
+  TokensTokenIdRoute: TokensTokenIdRoute,
 }
 
 const TokensRouteWithChildren =
   TokensRoute._addFileChildren(TokensRouteChildren)
+
+interface TryRequestIdRouteChildren {
+  TryRequestIdTokenIdRoute: typeof TryRequestIdTokenIdRoute
+}
+
+const TryRequestIdRouteChildren: TryRequestIdRouteChildren = {
+  TryRequestIdTokenIdRoute: TryRequestIdTokenIdRoute,
+}
+
+const TryRequestIdRouteWithChildren = TryRequestIdRoute._addFileChildren(
+  TryRequestIdRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppsRoute: AppsRouteWithChildren,
   TokensRoute: TokensRouteWithChildren,
   ApiSplatRoute: ApiSplatRoute,
+  TryRequestIdRoute: TryRequestIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

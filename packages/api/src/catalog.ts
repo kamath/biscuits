@@ -101,3 +101,22 @@ export const grants: StarterGrant[] = [
   },
   { id: "shared-files", appId: "drive", name: "Read the shared folder", lines: ["It may read files", 'Only read files where folder starts with "/shared"'] },
 ];
+
+/** A few requests an agent might send, some of which the preset tokens allow and some of which they don't. */
+export const requests: { id: string; name: string; app: string; action: string; args: Record<string, string> }[] = [
+  { id: "pay-landlord", name: "Pay the landlord 1,500", app: "bank", action: "send_payment", args: { payee: "landlord", amount: "1500" } },
+  { id: "pay-stranger", name: "Pay a stranger 5,000", app: "bank", action: "send_payment", args: { payee: "mallory", amount: "5000" } },
+  { id: "close-savings", name: "Close the savings account", app: "bank", action: "close_account", args: { account: "savings" } },
+  { id: "read-team", name: "Read a message from a teammate", app: "mail", action: "read_message", args: { sender: "sam@example.com", folder: "inbox" } },
+  { id: "mail-outside", name: "Email someone outside the team", app: "mail", action: "send_message", args: { recipient: "eve@elsewhere.net" } },
+  { id: "book-meeting", name: "Add a meeting to the work calendar", app: "calendar", action: "create_event", args: { calendar: "work", attendee: "sam@example.com" } },
+  { id: "delete-files", name: "Delete everything in /tmp", app: "drive", action: "delete_file", args: { folder: "/tmp" } },
+];
+
+/** Tokens minted when the catalogue is first asked for, so there is something to try straight away. */
+export const tokens: { id: string; name: string; grantIds: string[] }[] = [
+  { id: "preset-rent", name: "Pay the rent", grantIds: ["pay-rent"] },
+  { id: "preset-bank-read", name: "Bank, look only", grantIds: ["bank-read"] },
+  { id: "preset-rent-mail", name: "Rent and team mail", grantIds: ["pay-rent", "team-mail", "team-reply"] },
+  { id: "preset-work", name: "Work assistant", grantIds: ["team-mail", "team-reply", "work-calendar", "shared-files"] },
+];
