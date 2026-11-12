@@ -1,152 +1,141 @@
-import { useNavigate } from "@tanstack/react-router";
-import { compile, parseQualified, type AppSpec } from "api/grammar";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
-import { useEffect } from "react";
-import { modalAtom, tokenCursorAtom, tokensAtom, tokensCursorAtom, type Token } from "../lib/state.ts";
-import { ActionButton, useAction, useBack, useListNav } from "./keys.tsx";
-import { copy, describe, groupLabel, newId, Pane, useCatalogue, useWorld } from "./shared.tsx";
-import { item } from "./tw.ts";
-import { Query } from "./ui.tsx";
+import { useState } from "react";
+import { heldTokenAtom, modalAtom, tokensAtom, type Token } from "../lib/state.ts";
+import { Button, QueryState, Tag } from "./kit.tsx";
+import { Pass } from "./pass.tsx";
+import { copy, newId, useWorld } from "./shared.tsx";
 
-export function TokensPane({ focused, openId }: { focused: boolean; openId?: string }) {
-  const q = useCatalogue();
-  const { tokens } = useWorld();
+export const Page = ({ children }: { children: React.ReactNode }) => (
+  <div className="h-full overflow-auto overscroll-contain">
+    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-6 md:px-8 md:py-8">{children}</div>
+  </div>
+);
+
+const lineCount = (t: Token) => t.blocks.reduce((n, b) => n + b.length, 0);
+
+export function TokensPage() {
+  const { q, apps, tokens } = useWorld();
   const setModal = useSetAtom(modalAtom);
-  const setCursor = useSetAtom(tokensCursorAtom);
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (openId) setCursor(openId);
-  }, [openId, setCursor]);
-  const nav = useListNav({
-    name: "Tokens",
-    items: tokens,
-    keyOf: (t) => t.id,
-    cursorAtom: tokensCursorAtom,
-    active: focused,
-    onOpen: (t) => void navigate({ to: "/tokens/$tokenId", params: { tokenId: t.id } }),
-  });
-  const ready = focused && !!q.data;
-  const describeOne = useAction({ id: "tokens.describe", label: "Describe a token", keys: ["c"], group: "Tokens", enabled: ready, run: () => setModal({ kind: "describeToken" }) });
-  const mint = useAction({ id: "tokens.mint", label: "Mint from grants", keys: ["m"], group: "Tokens", enabled: ready, run: () => setModal({ kind: "mint" }) });
   return (
-    <Pane
-      focused={focused}
-      tone="bg-pane"
-      width="md:w-72 md:flex-none"
-      title="Tokens"
-      actions={
-        <>
-          <ActionButton action={describeOne} tone="primary" />
-          <ActionButton action={mint} />
-        </>
-      }
-    >
-      <Query q={q} what="the preset tokens">
+    <Page>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex max-w-[60ch] flex-col gap-1">
+          <h1 className="text-2xl font-semibold">Tokens</h1>
+          <p className="text-muted">A token is a set of lines you signed. It can cover several apps, and anyone holding one can attenuate it into a narrower one.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="primary" disabled={!q.data} onClick={() => setModal({ kind: "describeToken" })}>
+            Describe a new token
+          </Button>
+          <Button disabled={!q.data} onClick={() => setModal({ kind: "mint" })}>
+            Mint from grants
+          </Button>
+        </div>
+      </header>
+      <QueryState q={q} what="the preset tokens">
         {() => (
-          <ul ref={nav.listRef}>
+          <ul className="grid gap-3 sm:grid-cols-2">
             {tokens.map((t) => (
-              <li key={t.id} className={`${item} justify-between`} {...nav.rowProps(t)}>
-                <span className="truncate">{t.name}</span>
-                {t.how && <span className="text-[0.85rem] whitespace-nowrap opacity-70">{t.how}</span>}
+              <li key={t.id}>
+                <Link to="/tokens/$tokenId" params={{ tokenId: t.id }} className="flex h-full flex-col gap-2 rounded-2xl bg-paper p-4 ring-1 ring-line hover:ring-accent">
+                  <span className="text-lg leading-tight font-semibold">{t.name}</span>
+                  <span className="flex flex-wrap gap-1.5">
+                    {apps
+                      .filter((a) => t.appIds.includes(a.id))
+                      .map((a) => (
+                        <Tag key={a.id}>{a.name}</Tag>
+                      ))}
+                  </span>
+                  <span className="text-[0.9rem] text-muted">
+                    {lineCount(t)} {lineCount(t) === 1 ? "line" : "lines"}
+                    {t.how === "attenuated" && ", attenuated"}
+                    {t.how === "tampered" && ", tampered with"}
+                    {t.preset && ", preset"}
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>
         )}
-      </Query>
-    </Pane>
+      </QueryState>
+    </Page>
   );
 }
 
-export function TokenPane({ token, specs }: { token: Token; specs: AppSpec[] }) {
-  const navigate = useNavigate();
+export function TokenPage({ tokenId }: { tokenId: string }) {
+  const { q, apps, tokens } = useWorld();
   const setModal = useSetAtom(modalAtom);
   const setTokens = useSetAtom(tokensAtom);
-  const { apps, tokens, requests } = useWorld();
-  const parent = tokens.find((t) => t.id === token.parentId);
+  const setHeld = useSetAtom(heldTokenAtom);
+  const navigate = useNavigate();
+  const [datalog, setDatalog] = useState(true);
+  const token = tokens.find((t) => t.id === tokenId);
+  const back = (
+    <Link to="/tokens" className="self-start font-medium text-accent hover:text-accent-strong">
+      All tokens
+    </Link>
+  );
+  if (!q.data) {
+    return (
+      <Page>
+        <QueryState q={q} what="this token">
+          {() => null}
+        </QueryState>
+      </Page>
+    );
+  }
+  if (!token) {
+    return (
+      <Page>
+        {back}
+        <h1 className="text-2xl font-semibold">That token is gone</h1>
+        <p className="text-muted">Tokens you make live only in this tab's memory, so a reload clears them.</p>
+      </Page>
+    );
+  }
   const tampered = token.how === "tampered";
-  const nav = useListNav({
-    name: "Actions to try",
-    items: requests,
-    keyOf: (r) => r.id,
-    cursorAtom: tokenCursorAtom,
-    active: true,
-    onOpen: (r) => void navigate({ to: "/try/$requestId/$tokenId", params: { requestId: r.id, tokenId: token.id } }),
-    openLabel: "Try it with this token",
-  });
-  const back = useBack(() => void navigate({ to: "/tokens" }));
-  const group = "Token";
-  // A token that no longer verifies can't be extended.
-  const attenuate = useAction({ id: "token.attenuate", label: "Attenuate", keys: ["n"], group, enabled: !tampered, run: () => setModal({ kind: "attenuate", tokenId: token.id }) });
-  const tamper = useAction({
-    id: "token.tamper",
-    label: "Tamper with a copy",
-    keys: ["x"],
-    group,
-    enabled: !tampered,
-    run: () => {
-      // Flip one character in the middle, as someone editing the token by hand would. The original is kept.
-      const i = Math.floor(token.token.length / 2);
-      const changed = token.token.slice(0, i) + (token.token[i] === "A" ? "B" : "A") + token.token.slice(i + 1);
-      const id = newId();
-      setTokens((all) => [...all, { ...token, id, name: `${token.name}, tampered`.slice(0, 80), parentId: token.id, how: "tampered", token: changed, preset: false }]);
-      void navigate({ to: "/tokens/$tokenId", params: { tokenId: id } });
-    },
-  });
-  const yank = useAction({ id: "token.copy", label: "Copy token", keys: ["y"], group, run: () => void copy(token.token, "token") });
-  // Preset tokens come from the API and stay.
-  const remove = useAction({ id: "token.delete", label: "Delete token", keys: ["d"], group, enabled: !token.preset, run: () => setModal({ kind: "deleteToken", tokenId: token.id }) });
+  const tamper = () => {
+    // Flip one character in the middle, as someone editing the token by hand would. The original is kept.
+    const i = Math.floor(token.token.length / 2);
+    const changed = token.token.slice(0, i) + (token.token[i] === "A" ? "B" : "A") + token.token.slice(i + 1);
+    const id = newId();
+    setTokens((all) => [...all, { ...token, id, name: `${token.name}, tampered`.slice(0, 80), parentId: token.id, how: "tampered", token: changed, preset: false }]);
+    void navigate({ to: "/tokens/$tokenId", params: { tokenId: id } });
+  };
   return (
-    <Pane
-      focused
-      tone="bg-raised"
-      width="flex-1"
-      title={token.name}
-      back={back}
-      actions={
-        <>
-          <ActionButton action={attenuate} />
-          <ActionButton action={tamper}>Tamper</ActionButton>
-          <ActionButton action={yank}>Copy</ActionButton>
+    <Page>
+      {back}
+      <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_15rem]">
+        <Pass token={token} specs={apps.filter((a) => token.appIds.includes(a.id))} parent={tokens.find((t) => t.id === token.parentId)} showDatalog={datalog} />
+        <div className="flex flex-col items-stretch gap-2">
+          <Button
+            variant="primary"
+            onClick={() => {
+              setHeld(token.id);
+              void navigate({ to: "/" });
+            }}
+          >
+            Try it in the playground
+          </Button>
+          <Button disabled={tampered} onClick={() => setModal({ kind: "attenuate", tokenId: token.id })}>
+            Attenuate
+          </Button>
+          <Button disabled={tampered} onClick={tamper}>
+            Tamper with a copy
+          </Button>
+          <Button onClick={() => void copy(token.token, "the token")}>Copy</Button>
+          <Button variant="quiet" onClick={() => setDatalog((d) => !d)} aria-pressed={datalog}>
+            {datalog ? "Hide the Datalog" : "Show the Datalog"}
+          </Button>
+          {/* Preset tokens come from the API and stay. */}
           {!token.preset && (
-            <ActionButton action={remove} tone="danger">
+            <Button variant="danger" onClick={() => setModal({ kind: "deleteToken", tokenId: token.id })}>
               Delete
-            </ActionButton>
+            </Button>
           )}
-        </>
-      }
-    >
-      {token.how && (
-        <p className="px-3.5 py-2 text-muted">
-          {token.how === "attenuated" ? "Attenuated from" : "A copy, with one character changed, of"} {parent ? `“${parent.name}”` : "a token that has since been deleted"}.
-        </p>
-      )}
-      {token.blocks.map((lines, i) => (
-        <div key={i}>
-          <p className={groupLabel}>{i === 0 ? "Signed by you" : `Attenuation ${i}, added by a holder`}</p>
-          {lines.map((text, j) => {
-            const p = parseQualified(text, specs);
-            return (
-              <div key={j} className="px-3.5 py-1.5">
-                <p>{text}</p>
-                <code className="block break-words text-muted">{p.ok ? `${compile(p.line)};` : p.error}</code>
-              </div>
-            );
-          })}
         </div>
-      ))}
-      <p className={groupLabel}>Token</p>
-      <div className="px-3.5 py-1.5">
-        <code className={`block max-h-24 overflow-auto overscroll-none px-2.5 py-2 break-all ${tampered ? "bg-danger text-danger-ink" : "bg-well"}`}>{token.token}</code>
       </div>
-      <p className={groupLabel}>Try an action with it</p>
-      <ul ref={nav.listRef}>
-        {requests.map((r) => (
-          <li key={r.id} className={`${item} justify-between`} {...nav.rowProps(r)}>
-            <span className="truncate">{r.name}</span>
-            <span className="text-[0.85rem] whitespace-nowrap opacity-70">{describe(r, apps).app?.name}</span>
-          </li>
-        ))}
-      </ul>
-    </Pane>
+    </Page>
   );
 }

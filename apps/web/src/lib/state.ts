@@ -1,12 +1,9 @@
 import { atom } from "jotai";
-import type { AgentRequest } from "api";
+import type { AgentRequest, Cost, Verdict } from "api";
 import type { AppSpec } from "api/grammar";
 
 /** A reusable, unsigned set of lines for one app. Starter grants come from the API and can't be changed. */
 export type Grant = { id: string; appId: string; name: string; lines: string[]; starter?: boolean };
-
-/** One thing an agent tries to do. Preset ones come from the API. */
-export type TryRequest = AgentRequest & { id: string; name: string; preset?: boolean };
 
 export type Token = {
   id: string;
@@ -23,36 +20,44 @@ export type Token = {
   preset?: boolean;
 };
 
+/** One exchange in the playground: what the agent tried, with which token, and what the service answered. */
+export type Turn = {
+  id: string;
+  text: string;
+  tokenId: string;
+  tokenName: string;
+  /** What the words were resolved to. Absent while the model is still working it out, or if nothing matched. */
+  request: AgentRequest | null;
+  phase: "resolving" | "checking" | "done" | "unmatched" | "failed";
+  /** Why nothing matched, or what went wrong. */
+  note?: string;
+  verdict?: Verdict;
+  /** What the model call cost, when the words had to be worked out. */
+  cost?: Cost;
+};
+
 // What this tab has made exists only here, in memory: a reload clears it. These come from mutations and have no
 // server copy to refetch, which is why they are atoms and not query data.
 export const generatedAppsAtom = atom<AppSpec[]>([]);
 export const grantsAtom = atom<Grant[]>([]);
 export const tokensAtom = atom<Token[]>([]);
-export const requestsAtom = atom<TryRequest[]>([]);
+export const turnsAtom = atom<Turn[]>([]);
+/** The token the agent is holding in the playground. Null means the first one. */
+export const heldTokenAtom = atom<string | null>(null);
 /** What the model calls made from this tab have cost so far. */
 export const spendAtom = atom({ usd: 0, calls: 0 });
-
-export const requestsCursorAtom = atom<string | null>(null);
-export const pickCursorAtom = atom<string | null>(null);
-export const traceCursorAtom = atom<string | null>(null);
-export const appsCursorAtom = atom<string | null>(null);
-export const appCursorAtom = atom<string | null>(null);
-export const sentenceCursorAtom = atom<string | null>(null);
-export const tokensCursorAtom = atom<string | null>(null);
-export const tokenCursorAtom = atom<string | null>(null);
 
 export type ModalState =
   | null
   | { kind: "newApp" }
   | { kind: "grant"; appId: string; grantId?: string }
-  /** Describe a new request for the model to resolve, or change the values of an existing one. */
-  | { kind: "request"; requestId?: string }
-  /** Describe a token for the model to draft. With a request, the new token is tried against it straight away. */
-  | { kind: "describeToken"; requestId?: string }
-  | { kind: "mint"; grantId?: string }
-  | { kind: "attenuate"; tokenId: string }
+  /** Describe a token for the model to draft. `hold` puts the result in the agent's hand. */
+  | { kind: "describeToken"; hold?: boolean }
+  | { kind: "mint"; grantId?: string; hold?: boolean }
+  | { kind: "attenuate"; tokenId: string; hold?: boolean }
+  /** Change the values of a request the agent already made, and send it again. */
+  | { kind: "editTurn"; turnId: string }
   | { kind: "deleteApp"; appId: string }
   | { kind: "deleteGrant"; grantId: string }
-  | { kind: "deleteRequest"; requestId: string }
   | { kind: "deleteToken"; tokenId: string };
 export const modalAtom = atom<ModalState>(null);

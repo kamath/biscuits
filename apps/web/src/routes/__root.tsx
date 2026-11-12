@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import css from "../styles.css?url";
-import { Shell } from "../ui/Shell.tsx";
-import { ToastProvider } from "../ui/toast.tsx";
+import { ToastProvider } from "../ui/kit.tsx";
+import { Layout } from "../ui/Layout.tsx";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -35,7 +35,9 @@ function App() {
   return (
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <Shell />
+        <Layout>
+          <Outlet />
+        </Layout>
       </ToastProvider>
     </QueryClientProvider>
   );

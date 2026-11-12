@@ -1,4 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AppPage } from "../ui/apps.tsx";
 
-// The open path lives in the URL; <Shell> in the root route reads it and draws one pane per level.
-export const Route = createFileRoute("/apps/$appId")({ component: () => null });
+export const Route = createFileRoute("/apps/$appId")({ component: () => <AppPage appId={Route.useParams().appId} /> });

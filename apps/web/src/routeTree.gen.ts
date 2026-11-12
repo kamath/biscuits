@@ -10,29 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AppsRouteImport } from './routes/apps'
-import { Route as TokensRouteImport } from './routes/tokens'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
+import { Route as AppsIndexRouteImport } from './routes/apps.index'
 import { Route as AppsAppIdRouteImport } from './routes/apps.$appId'
+import { Route as TokensIndexRouteImport } from './routes/tokens.index'
 import { Route as TokensTokenIdRouteImport } from './routes/tokens.$tokenId'
-import { Route as TryRequestIdRouteImport } from './routes/try.$requestId'
-import { Route as TryRequestIdTokenIdRouteImport } from './routes/try.$requestId.$tokenId'
-import { Route as AppsAppIdActionsActionIdRouteImport } from './routes/apps.$appId.actions.$actionId'
-import { Route as AppsAppIdGrantsGrantIdRouteImport } from './routes/apps.$appId.grants.$grantId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AppsRoute = AppsRouteImport.update({
-  id: '/apps',
-  path: '/apps',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TokensRoute = TokensRouteImport.update({
-  id: '/tokens',
-  path: '/tokens',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
@@ -40,120 +26,75 @@ const ApiSplatRoute = ApiSplatRouteImport.update({
   path: '/api/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppsAppIdRoute = AppsAppIdRouteImport.update({
-  id: '/$appId',
-  path: '/$appId',
-  getParentRoute: () => AppsRoute,
-} as any)
-const TokensTokenIdRoute = TokensTokenIdRouteImport.update({
-  id: '/$tokenId',
-  path: '/$tokenId',
-  getParentRoute: () => TokensRoute,
-} as any)
-const TryRequestIdRoute = TryRequestIdRouteImport.update({
-  id: '/try/$requestId',
-  path: '/try/$requestId',
+const AppsIndexRoute = AppsIndexRouteImport.update({
+  id: '/apps/',
+  path: '/apps/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TryRequestIdTokenIdRoute = TryRequestIdTokenIdRouteImport.update({
-  id: '/$tokenId',
-  path: '/$tokenId',
-  getParentRoute: () => TryRequestIdRoute,
+const AppsAppIdRoute = AppsAppIdRouteImport.update({
+  id: '/apps/$appId',
+  path: '/apps/$appId',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppsAppIdActionsActionIdRoute =
-  AppsAppIdActionsActionIdRouteImport.update({
-    id: '/actions/$actionId',
-    path: '/actions/$actionId',
-    getParentRoute: () => AppsAppIdRoute,
-  } as any)
-const AppsAppIdGrantsGrantIdRoute = AppsAppIdGrantsGrantIdRouteImport.update({
-  id: '/grants/$grantId',
-  path: '/grants/$grantId',
-  getParentRoute: () => AppsAppIdRoute,
+const TokensIndexRoute = TokensIndexRouteImport.update({
+  id: '/tokens/',
+  path: '/tokens/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TokensTokenIdRoute = TokensTokenIdRouteImport.update({
+  id: '/tokens/$tokenId',
+  path: '/tokens/$tokenId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/apps': typeof AppsRouteWithChildren
-  '/tokens': typeof TokensRouteWithChildren
   '/api/$': typeof ApiSplatRoute
-  '/apps/$appId': typeof AppsAppIdRouteWithChildren
+  '/apps/$appId': typeof AppsAppIdRoute
   '/tokens/$tokenId': typeof TokensTokenIdRoute
-  '/try/$requestId': typeof TryRequestIdRouteWithChildren
-  '/try/$requestId/$tokenId': typeof TryRequestIdTokenIdRoute
-  '/apps/$appId/actions/$actionId': typeof AppsAppIdActionsActionIdRoute
-  '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRoute
+  '/apps/': typeof AppsIndexRoute
+  '/tokens/': typeof TokensIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/apps': typeof AppsRouteWithChildren
-  '/tokens': typeof TokensRouteWithChildren
   '/api/$': typeof ApiSplatRoute
-  '/apps/$appId': typeof AppsAppIdRouteWithChildren
+  '/apps/$appId': typeof AppsAppIdRoute
   '/tokens/$tokenId': typeof TokensTokenIdRoute
-  '/try/$requestId': typeof TryRequestIdRouteWithChildren
-  '/try/$requestId/$tokenId': typeof TryRequestIdTokenIdRoute
-  '/apps/$appId/actions/$actionId': typeof AppsAppIdActionsActionIdRoute
-  '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRoute
+  '/apps': typeof AppsIndexRoute
+  '/tokens': typeof TokensIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/apps': typeof AppsRouteWithChildren
-  '/tokens': typeof TokensRouteWithChildren
   '/api/$': typeof ApiSplatRoute
-  '/apps/$appId': typeof AppsAppIdRouteWithChildren
+  '/apps/$appId': typeof AppsAppIdRoute
   '/tokens/$tokenId': typeof TokensTokenIdRoute
-  '/try/$requestId': typeof TryRequestIdRouteWithChildren
-  '/try/$requestId/$tokenId': typeof TryRequestIdTokenIdRoute
-  '/apps/$appId/actions/$actionId': typeof AppsAppIdActionsActionIdRoute
-  '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRoute
+  '/apps/': typeof AppsIndexRoute
+  '/tokens/': typeof TokensIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/apps'
-    | '/tokens'
-    | '/api/$'
-    | '/apps/$appId'
-    | '/tokens/$tokenId'
-    | '/try/$requestId'
-    | '/try/$requestId/$tokenId'
-    | '/apps/$appId/actions/$actionId'
-    | '/apps/$appId/grants/$grantId'
+    '/' | '/api/$' | '/apps/$appId' | '/tokens/$tokenId' | '/apps/' | '/tokens/'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/apps'
-    | '/tokens'
-    | '/api/$'
-    | '/apps/$appId'
-    | '/tokens/$tokenId'
-    | '/try/$requestId'
-    | '/try/$requestId/$tokenId'
-    | '/apps/$appId/actions/$actionId'
-    | '/apps/$appId/grants/$grantId'
+  to: '/' | '/api/$' | '/apps/$appId' | '/tokens/$tokenId' | '/apps' | '/tokens'
   id:
     | '__root__'
     | '/'
-    | '/apps'
-    | '/tokens'
     | '/api/$'
     | '/apps/$appId'
     | '/tokens/$tokenId'
-    | '/try/$requestId'
-    | '/try/$requestId/$tokenId'
-    | '/apps/$appId/actions/$actionId'
-    | '/apps/$appId/grants/$grantId'
+    | '/apps/'
+    | '/tokens/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AppsRoute: typeof AppsRouteWithChildren
-  TokensRoute: typeof TokensRouteWithChildren
   ApiSplatRoute: typeof ApiSplatRoute
-  TryRequestIdRoute: typeof TryRequestIdRouteWithChildren
+  AppsAppIdRoute: typeof AppsAppIdRoute
+  TokensTokenIdRoute: typeof TokensTokenIdRoute
+  AppsIndexRoute: typeof AppsIndexRoute
+  TokensIndexRoute: typeof TokensIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -165,20 +106,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/apps': {
-      id: '/apps'
-      path: '/apps'
-      fullPath: '/apps'
-      preLoaderRoute: typeof AppsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/tokens': {
-      id: '/tokens'
-      path: '/tokens'
-      fullPath: '/tokens'
-      preLoaderRoute: typeof TokensRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/$': {
       id: '/api/$'
       path: '/api/$'
@@ -186,104 +113,44 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apps/': {
+      id: '/apps/'
+      path: '/apps'
+      fullPath: '/apps/'
+      preLoaderRoute: typeof AppsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/apps/$appId': {
       id: '/apps/$appId'
-      path: '/$appId'
+      path: '/apps/$appId'
       fullPath: '/apps/$appId'
       preLoaderRoute: typeof AppsAppIdRouteImport
-      parentRoute: typeof AppsRoute
+      parentRoute: typeof rootRouteImport
+    }
+    '/tokens/': {
+      id: '/tokens/'
+      path: '/tokens'
+      fullPath: '/tokens/'
+      preLoaderRoute: typeof TokensIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/tokens/$tokenId': {
       id: '/tokens/$tokenId'
-      path: '/$tokenId'
+      path: '/tokens/$tokenId'
       fullPath: '/tokens/$tokenId'
       preLoaderRoute: typeof TokensTokenIdRouteImport
-      parentRoute: typeof TokensRoute
-    }
-    '/try/$requestId': {
-      id: '/try/$requestId'
-      path: '/try/$requestId'
-      fullPath: '/try/$requestId'
-      preLoaderRoute: typeof TryRequestIdRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/try/$requestId/$tokenId': {
-      id: '/try/$requestId/$tokenId'
-      path: '/$tokenId'
-      fullPath: '/try/$requestId/$tokenId'
-      preLoaderRoute: typeof TryRequestIdTokenIdRouteImport
-      parentRoute: typeof TryRequestIdRoute
-    }
-    '/apps/$appId/actions/$actionId': {
-      id: '/apps/$appId/actions/$actionId'
-      path: '/actions/$actionId'
-      fullPath: '/apps/$appId/actions/$actionId'
-      preLoaderRoute: typeof AppsAppIdActionsActionIdRouteImport
-      parentRoute: typeof AppsAppIdRoute
-    }
-    '/apps/$appId/grants/$grantId': {
-      id: '/apps/$appId/grants/$grantId'
-      path: '/grants/$grantId'
-      fullPath: '/apps/$appId/grants/$grantId'
-      preLoaderRoute: typeof AppsAppIdGrantsGrantIdRouteImport
-      parentRoute: typeof AppsAppIdRoute
     }
   }
 }
 
-interface AppsAppIdRouteChildren {
-  AppsAppIdActionsActionIdRoute: typeof AppsAppIdActionsActionIdRoute
-  AppsAppIdGrantsGrantIdRoute: typeof AppsAppIdGrantsGrantIdRoute
-}
-
-const AppsAppIdRouteChildren: AppsAppIdRouteChildren = {
-  AppsAppIdActionsActionIdRoute: AppsAppIdActionsActionIdRoute,
-  AppsAppIdGrantsGrantIdRoute: AppsAppIdGrantsGrantIdRoute,
-}
-
-const AppsAppIdRouteWithChildren = AppsAppIdRoute._addFileChildren(
-  AppsAppIdRouteChildren,
-)
-
-interface AppsRouteChildren {
-  AppsAppIdRoute: typeof AppsAppIdRouteWithChildren
-}
-
-const AppsRouteChildren: AppsRouteChildren = {
-  AppsAppIdRoute: AppsAppIdRouteWithChildren,
-}
-
-const AppsRouteWithChildren = AppsRoute._addFileChildren(AppsRouteChildren)
-
-interface TokensRouteChildren {
-  TokensTokenIdRoute: typeof TokensTokenIdRoute
-}
-
-const TokensRouteChildren: TokensRouteChildren = {
-  TokensTokenIdRoute: TokensTokenIdRoute,
-}
-
-const TokensRouteWithChildren =
-  TokensRoute._addFileChildren(TokensRouteChildren)
-
-interface TryRequestIdRouteChildren {
-  TryRequestIdTokenIdRoute: typeof TryRequestIdTokenIdRoute
-}
-
-const TryRequestIdRouteChildren: TryRequestIdRouteChildren = {
-  TryRequestIdTokenIdRoute: TryRequestIdTokenIdRoute,
-}
-
-const TryRequestIdRouteWithChildren = TryRequestIdRoute._addFileChildren(
-  TryRequestIdRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AppsRoute: AppsRouteWithChildren,
-  TokensRoute: TokensRouteWithChildren,
   ApiSplatRoute: ApiSplatRoute,
-  TryRequestIdRoute: TryRequestIdRouteWithChildren,
+  AppsAppIdRoute: AppsAppIdRoute,
+  TokensTokenIdRoute: TokensTokenIdRoute,
+  AppsIndexRoute: AppsIndexRoute,
+  TokensIndexRoute: TokensIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
