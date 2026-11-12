@@ -10,15 +10,28 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppsRouteImport } from './routes/apps'
+import { Route as TokensRouteImport } from './routes/tokens'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as AppsAppIdRouteImport } from './routes/apps.$appId'
+import { Route as TokensTokenIdRouteImport } from './routes/tokens.$tokenId'
 import { Route as AppsAppIdActionsActionIdRouteImport } from './routes/apps.$appId.actions.$actionId'
 import { Route as AppsAppIdGrantsGrantIdRouteImport } from './routes/apps.$appId.grants.$grantId'
-import { Route as AppsAppIdGrantsGrantIdActionIdRouteImport } from './routes/apps.$appId.grants.$grantId.$actionId'
+import { Route as TokensTokenIdAppIdActionIdRouteImport } from './routes/tokens.$tokenId.$appId.$actionId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppsRoute = AppsRouteImport.update({
+  id: '/apps',
+  path: '/apps',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TokensRoute = TokensRouteImport.update({
+  id: '/tokens',
+  path: '/tokens',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
@@ -27,9 +40,14 @@ const ApiSplatRoute = ApiSplatRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppsAppIdRoute = AppsAppIdRouteImport.update({
-  id: '/apps/$appId',
-  path: '/apps/$appId',
-  getParentRoute: () => rootRouteImport,
+  id: '/$appId',
+  path: '/$appId',
+  getParentRoute: () => AppsRoute,
+} as any)
+const TokensTokenIdRoute = TokensTokenIdRouteImport.update({
+  id: '/$tokenId',
+  path: '/$tokenId',
+  getParentRoute: () => TokensRoute,
 } as any)
 const AppsAppIdActionsActionIdRoute =
   AppsAppIdActionsActionIdRouteImport.update({
@@ -42,69 +60,88 @@ const AppsAppIdGrantsGrantIdRoute = AppsAppIdGrantsGrantIdRouteImport.update({
   path: '/grants/$grantId',
   getParentRoute: () => AppsAppIdRoute,
 } as any)
-const AppsAppIdGrantsGrantIdActionIdRoute =
-  AppsAppIdGrantsGrantIdActionIdRouteImport.update({
-    id: '/$actionId',
-    path: '/$actionId',
-    getParentRoute: () => AppsAppIdGrantsGrantIdRoute,
+const TokensTokenIdAppIdActionIdRoute =
+  TokensTokenIdAppIdActionIdRouteImport.update({
+    id: '/$appId/$actionId',
+    path: '/$appId/$actionId',
+    getParentRoute: () => TokensTokenIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/apps': typeof AppsRouteWithChildren
+  '/tokens': typeof TokensRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRouteWithChildren
+  '/tokens/$tokenId': typeof TokensTokenIdRouteWithChildren
   '/apps/$appId/actions/$actionId': typeof AppsAppIdActionsActionIdRoute
-  '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRouteWithChildren
-  '/apps/$appId/grants/$grantId/$actionId': typeof AppsAppIdGrantsGrantIdActionIdRoute
+  '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRoute
+  '/tokens/$tokenId/$appId/$actionId': typeof TokensTokenIdAppIdActionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/apps': typeof AppsRouteWithChildren
+  '/tokens': typeof TokensRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRouteWithChildren
+  '/tokens/$tokenId': typeof TokensTokenIdRouteWithChildren
   '/apps/$appId/actions/$actionId': typeof AppsAppIdActionsActionIdRoute
-  '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRouteWithChildren
-  '/apps/$appId/grants/$grantId/$actionId': typeof AppsAppIdGrantsGrantIdActionIdRoute
+  '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRoute
+  '/tokens/$tokenId/$appId/$actionId': typeof TokensTokenIdAppIdActionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/apps': typeof AppsRouteWithChildren
+  '/tokens': typeof TokensRouteWithChildren
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRouteWithChildren
+  '/tokens/$tokenId': typeof TokensTokenIdRouteWithChildren
   '/apps/$appId/actions/$actionId': typeof AppsAppIdActionsActionIdRoute
-  '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRouteWithChildren
-  '/apps/$appId/grants/$grantId/$actionId': typeof AppsAppIdGrantsGrantIdActionIdRoute
+  '/apps/$appId/grants/$grantId': typeof AppsAppIdGrantsGrantIdRoute
+  '/tokens/$tokenId/$appId/$actionId': typeof TokensTokenIdAppIdActionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/apps'
+    | '/tokens'
     | '/api/$'
     | '/apps/$appId'
+    | '/tokens/$tokenId'
     | '/apps/$appId/actions/$actionId'
     | '/apps/$appId/grants/$grantId'
-    | '/apps/$appId/grants/$grantId/$actionId'
+    | '/tokens/$tokenId/$appId/$actionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/apps'
+    | '/tokens'
     | '/api/$'
     | '/apps/$appId'
+    | '/tokens/$tokenId'
     | '/apps/$appId/actions/$actionId'
     | '/apps/$appId/grants/$grantId'
-    | '/apps/$appId/grants/$grantId/$actionId'
+    | '/tokens/$tokenId/$appId/$actionId'
   id:
     | '__root__'
     | '/'
+    | '/apps'
+    | '/tokens'
     | '/api/$'
     | '/apps/$appId'
+    | '/tokens/$tokenId'
     | '/apps/$appId/actions/$actionId'
     | '/apps/$appId/grants/$grantId'
-    | '/apps/$appId/grants/$grantId/$actionId'
+    | '/tokens/$tokenId/$appId/$actionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppsRoute: typeof AppsRouteWithChildren
+  TokensRoute: typeof TokensRouteWithChildren
   ApiSplatRoute: typeof ApiSplatRoute
-  AppsAppIdRoute: typeof AppsAppIdRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +153,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apps': {
+      id: '/apps'
+      path: '/apps'
+      fullPath: '/apps'
+      preLoaderRoute: typeof AppsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tokens': {
+      id: '/tokens'
+      path: '/tokens'
+      fullPath: '/tokens'
+      preLoaderRoute: typeof TokensRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/$': {
       id: '/api/$'
       path: '/api/$'
@@ -125,10 +176,17 @@ declare module '@tanstack/react-router' {
     }
     '/apps/$appId': {
       id: '/apps/$appId'
-      path: '/apps/$appId'
+      path: '/$appId'
       fullPath: '/apps/$appId'
       preLoaderRoute: typeof AppsAppIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AppsRoute
+    }
+    '/tokens/$tokenId': {
+      id: '/tokens/$tokenId'
+      path: '/$tokenId'
+      fullPath: '/tokens/$tokenId'
+      preLoaderRoute: typeof TokensTokenIdRouteImport
+      parentRoute: typeof TokensRoute
     }
     '/apps/$appId/actions/$actionId': {
       id: '/apps/$appId/actions/$actionId'
@@ -144,48 +202,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppsAppIdGrantsGrantIdRouteImport
       parentRoute: typeof AppsAppIdRoute
     }
-    '/apps/$appId/grants/$grantId/$actionId': {
-      id: '/apps/$appId/grants/$grantId/$actionId'
-      path: '/$actionId'
-      fullPath: '/apps/$appId/grants/$grantId/$actionId'
-      preLoaderRoute: typeof AppsAppIdGrantsGrantIdActionIdRouteImport
-      parentRoute: typeof AppsAppIdGrantsGrantIdRoute
+    '/tokens/$tokenId/$appId/$actionId': {
+      id: '/tokens/$tokenId/$appId/$actionId'
+      path: '/$appId/$actionId'
+      fullPath: '/tokens/$tokenId/$appId/$actionId'
+      preLoaderRoute: typeof TokensTokenIdAppIdActionIdRouteImport
+      parentRoute: typeof TokensTokenIdRoute
     }
   }
 }
 
-interface AppsAppIdGrantsGrantIdRouteChildren {
-  AppsAppIdGrantsGrantIdActionIdRoute: typeof AppsAppIdGrantsGrantIdActionIdRoute
-}
-
-const AppsAppIdGrantsGrantIdRouteChildren: AppsAppIdGrantsGrantIdRouteChildren =
-  {
-    AppsAppIdGrantsGrantIdActionIdRoute: AppsAppIdGrantsGrantIdActionIdRoute,
-  }
-
-const AppsAppIdGrantsGrantIdRouteWithChildren =
-  AppsAppIdGrantsGrantIdRoute._addFileChildren(
-    AppsAppIdGrantsGrantIdRouteChildren,
-  )
-
 interface AppsAppIdRouteChildren {
   AppsAppIdActionsActionIdRoute: typeof AppsAppIdActionsActionIdRoute
-  AppsAppIdGrantsGrantIdRoute: typeof AppsAppIdGrantsGrantIdRouteWithChildren
+  AppsAppIdGrantsGrantIdRoute: typeof AppsAppIdGrantsGrantIdRoute
 }
 
 const AppsAppIdRouteChildren: AppsAppIdRouteChildren = {
   AppsAppIdActionsActionIdRoute: AppsAppIdActionsActionIdRoute,
-  AppsAppIdGrantsGrantIdRoute: AppsAppIdGrantsGrantIdRouteWithChildren,
+  AppsAppIdGrantsGrantIdRoute: AppsAppIdGrantsGrantIdRoute,
 }
 
 const AppsAppIdRouteWithChildren = AppsAppIdRoute._addFileChildren(
   AppsAppIdRouteChildren,
 )
 
+interface AppsRouteChildren {
+  AppsAppIdRoute: typeof AppsAppIdRouteWithChildren
+}
+
+const AppsRouteChildren: AppsRouteChildren = {
+  AppsAppIdRoute: AppsAppIdRouteWithChildren,
+}
+
+const AppsRouteWithChildren = AppsRoute._addFileChildren(AppsRouteChildren)
+
+interface TokensTokenIdRouteChildren {
+  TokensTokenIdAppIdActionIdRoute: typeof TokensTokenIdAppIdActionIdRoute
+}
+
+const TokensTokenIdRouteChildren: TokensTokenIdRouteChildren = {
+  TokensTokenIdAppIdActionIdRoute: TokensTokenIdAppIdActionIdRoute,
+}
+
+const TokensTokenIdRouteWithChildren = TokensTokenIdRoute._addFileChildren(
+  TokensTokenIdRouteChildren,
+)
+
+interface TokensRouteChildren {
+  TokensTokenIdRoute: typeof TokensTokenIdRouteWithChildren
+}
+
+const TokensRouteChildren: TokensRouteChildren = {
+  TokensTokenIdRoute: TokensTokenIdRouteWithChildren,
+}
+
+const TokensRouteWithChildren =
+  TokensRoute._addFileChildren(TokensRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppsRoute: AppsRouteWithChildren,
+  TokensRoute: TokensRouteWithChildren,
   ApiSplatRoute: ApiSplatRoute,
-  AppsAppIdRoute: AppsAppIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

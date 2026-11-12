@@ -80,7 +80,7 @@ export function toLines(draft: GrantDraft, spec: AppSpec): { lines: Line[]; drop
   const dropped: string[] = [];
   for (const l of draft.lines.slice(0, 24)) {
     if (l.kind === "before") {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(l.date)) lines.push({ kind: "before", date: l.date });
+      if (/^\d{4}-\d{2}-\d{2}$/.test(l.date)) lines.push({ kind: "before", app: spec.id, date: l.date });
       else dropped.push(`a time limit with no usable date`);
       continue;
     }
@@ -90,7 +90,7 @@ export function toLines(draft: GrantDraft, spec: AppSpec): { lines: Line[]; drop
       continue;
     }
     if (l.kind === "may") {
-      lines.push({ kind: "may", action: action.id });
+      lines.push({ kind: "may", app: spec.id, action: action.id });
       continue;
     }
     const param = action.params.find((p) => p.name === l.param);
@@ -102,9 +102,9 @@ export function toLines(draft: GrantDraft, spec: AppSpec): { lines: Line[]; drop
     }
     if (param.type === "number") {
       if (!/^-?\d{1,15}$/.test(l.value.trim())) dropped.push(`a limit on ${param.name} that isn't a whole number`);
-      else lines.push({ kind: "where", action: action.id, param: param.name, op: l.op, value: Number(l.value.trim()) });
+      else lines.push({ kind: "where", app: spec.id, action: action.id, param: param.name, op: l.op, value: Number(l.value.trim()) });
     } else {
-      lines.push({ kind: "where", action: action.id, param: param.name, op: l.op, value: clean(l.value, 120) });
+      lines.push({ kind: "where", app: spec.id, action: action.id, param: param.name, op: l.op, value: clean(l.value, 120) });
     }
   }
   return { lines, dropped };

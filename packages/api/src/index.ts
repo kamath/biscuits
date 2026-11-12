@@ -1,11 +1,13 @@
 // The API: a Hono app whose routes, validation and OpenAPI document all come from the same Zod schemas.
 // It keeps nothing. Apps, grants and tokens live in the browser and travel with each call.
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { authorize, narrow, sign } from "./biscuit.ts";
+import { attenuate, authorize, mint } from "./biscuit.ts";
+import * as catalog from "./catalog.ts";
 import { render, type AppSpec } from "./grammar.ts";
 import { appDraftSchema, grantDraftSchema, toLines, toSpec } from "./spec.ts";
 
 export type { Verdict } from "./biscuit.ts";
+export type { StarterGrant } from "./catalog.ts";
 
 export const MODEL = "openai/gpt-6-luna";
 
@@ -29,7 +31,9 @@ const Spec = z
       .max(8),
   })
   .openapi("App");
-const Lines = z.array(z.string().max(300)).min(1).max(40).openapi("Lines", { description: "Grant sentences, one per item." });
+const Specs = z.array(Spec).min(1).max(12).openapi("Apps", { description: "Every app the token's lines mention." });
+const Lines = z.array(z.string().max(300)).min(1).max(80).openapi("Lines", { description: "Qualified sentences, one per item." });
+const Grant = z.object({ id: z.string(), appId: z.string(), name: z.string(), lines: z.array(z.string()) }).openapi("Grant");
 const Token = z.string().max(20000).openapi("Token", { description: "A Biscuit, URL-safe base64." });
 const PublicKey = z.string().regex(/^[0-9a-f]{64}$/).openapi("PublicKey", { description: "Ed25519 root key of the grant, hex." });
 const Problem = z.object({ error: z.string() }).openapi("Problem");
@@ -58,6 +62,15 @@ async function ask<T>(schema: z.ZodType<T>, instructions: string, prompt: string
   return output;
 }
 
+const listApps = createRoute({
+  method: "get",
+  path: "/apps",
+  operationId: "listApps",
+  summary: "List the built-in apps",
+  description: "The sample services that ship with the demo, and a few starter grants for them.",
+  responses: { 200: json(z.object({ apps: z.array(Spec), grants: z.array(Grant) }).openapi("Catalogue"), "Apps and starter grants") },
+});
+
 const generateApp = createRoute({
   method: "post",
   path: "/apps",
@@ -73,7 +86,7 @@ const draftGrant = createRoute({
   path: "/grants/draft",
   operationId: "draftGrant",
   summary: "Draft grant sentences from plain English",
-  description: "Asks the model to express a request in the app's sentence templates. A draft for the user to read; nothing is signed.",
+  description: "Asks the model to express a request in one app's sentence templates. A draft for the user to read; nothing is signed.",
   request: body(z.object({ spec: Spec, request: z.string().trim().min(1).max(600), today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })),
   responses: {
     200: json(z.object({ lines: z.array(z.string()), unsupported: z.array(z.string()) }).openapi("GrantDraft"), "Sentences, and what they could not express"),
@@ -82,24 +95,25 @@ const draftGrant = createRoute({
   },
 });
 
-const signGrant = createRoute({
+const mintToken = createRoute({
   method: "post",
-  path: "/grants",
-  operationId: "signGrant",
-  summary: "Sign a grant",
-  description: "Compiles the sentences to Datalog and signs them as a Biscuit with a fresh key pair. The private key is discarded.",
-  request: body(z.object({ spec: Spec, lines: Lines })),
-  responses: { 200: json(z.object({ token: Token, publicKey: PublicKey }).openapi("SignedGrant"), "The token and its root key"), 400: problem("A line matches no template") },
+  path: "/tokens",
+  operationId: "mintToken",
+  summary: "Mint a token",
+  description:
+    "Compiles qualified sentences, from one or more grants across one or more apps, to Datalog and signs them as a Biscuit with a fresh key pair. The private key is discarded.",
+  request: body(z.object({ specs: Specs, lines: Lines })),
+  responses: { 200: json(z.object({ token: Token, publicKey: PublicKey }).openapi("MintedToken"), "The token and its root key"), 400: problem("A line matches no template") },
 });
 
-const narrowGrant = createRoute({
+const attenuateToken = createRoute({
   method: "post",
-  path: "/grants/narrow",
-  operationId: "narrowGrant",
-  summary: "Narrow a grant",
-  description: 'Appends a block of "Only…" sentences to a token. Needs no key: any holder can do it.',
-  request: body(z.object({ spec: Spec, token: Token, publicKey: PublicKey, lines: Lines })),
-  responses: { 200: json(z.object({ token: Token }).openapi("NarrowedGrant"), "The longer token"), 400: problem("A line is not a restriction, or the token doesn't verify") },
+  path: "/tokens/attenuate",
+  operationId: "attenuateToken",
+  summary: "Attenuate a token",
+  description: "Appends a block of restrictions to a starting token and returns the result as a new token. Needs no key: any holder can do it.",
+  request: body(z.object({ specs: Specs, token: Token, publicKey: PublicKey, lines: Lines })),
+  responses: { 200: json(z.object({ token: Token }).openapi("AttenuatedToken"), "The new, narrower token"), 400: problem("A line is not a restriction, or the token doesn't verify") },
 });
 
 const sendRequest = createRoute({
@@ -108,8 +122,8 @@ const sendRequest = createRoute({
   operationId: "sendRequest",
   summary: "Send an agent's request",
   description: "Plays the service: verifies the token, re-derives each block's Datalog from its sentences, and lets Biscuit decide.",
-  request: body(z.object({ spec: Spec, token: Token, publicKey: PublicKey, action: ident, args: z.record(z.string(), z.string().max(200)) })),
-  responses: { 200: json(Verdict, "Allowed, denied (with the sentences responsible), or invalid"), 400: problem("Unknown action or malformed argument") },
+  request: body(z.object({ specs: Specs, token: Token, publicKey: PublicKey, app: z.string().max(40), action: ident, args: z.record(z.string(), z.string().max(200)) })),
+  responses: { 200: json(Verdict, "Allowed, denied (with the sentences responsible), or invalid"), 400: problem("Unknown app or action, or a malformed argument") },
 });
 
 const base = new OpenAPIHono({
@@ -127,6 +141,7 @@ base.doc("/openapi.json", {
 });
 
 export const app = base
+  .openapi(listApps, (c) => c.json({ apps: catalog.apps, grants: catalog.grants }, 200))
   .openapi(generateApp, async (c) => {
     const { prompt } = c.req.valid("json");
     try {
@@ -171,27 +186,27 @@ Request: ${data.request}`,
       return c.json({ error: message(e) }, 502);
     }
   })
-  .openapi(signGrant, async (c) => {
-    const { spec, lines } = c.req.valid("json");
+  .openapi(mintToken, async (c) => {
+    const { specs, lines } = c.req.valid("json");
     try {
-      return c.json(await sign(spec, lines), 200);
+      return c.json(await mint(specs, lines), 200);
     } catch (e) {
       return c.json({ error: message(e) }, 400);
     }
   })
-  .openapi(narrowGrant, async (c) => {
-    const { spec, token, publicKey, lines } = c.req.valid("json");
+  .openapi(attenuateToken, async (c) => {
+    const { specs, token, publicKey, lines } = c.req.valid("json");
     try {
-      return c.json(await narrow(spec, token, publicKey, lines), 200);
+      return c.json(await attenuate(specs, token, publicKey, lines), 200);
     } catch (e) {
       // Biscuit throws plain objects for a token that doesn't parse or verify.
-      return c.json({ error: e instanceof Error ? e.message : "The token doesn't verify, so it can't be extended." }, 400);
+      return c.json({ error: e instanceof Error ? e.message : "The starting token doesn't verify, so it can't be attenuated." }, 400);
     }
   })
   .openapi(sendRequest, async (c) => {
-    const { spec, token, publicKey, action, args } = c.req.valid("json");
+    const { specs, token, publicKey, app, action, args } = c.req.valid("json");
     try {
-      return c.json(await authorize(spec, token, publicKey, action, args), 200);
+      return c.json(await authorize(specs, token, publicKey, app, action, args), 200);
     } catch (e) {
       return c.json({ error: message(e) }, 400);
     }

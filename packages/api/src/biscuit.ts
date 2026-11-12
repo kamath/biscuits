@@ -44,16 +44,16 @@ function load(): Promise<Lib> {
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : JSON.stringify(e));
-const need = (lines: string[], spec: AppSpec, narrowing: boolean): BlockLine[] => {
-  const parsed = parseBlock(lines, spec, narrowing);
+const need = (lines: string[], specs: AppSpec[], attenuating: boolean): BlockLine[] => {
+  const parsed = parseBlock(lines, specs, attenuating);
   if (!parsed.ok) throw new Error(parsed.errors.map((e) => `Line ${e.index + 1}: ${e.error}`).join(" "));
   return parsed.lines;
 };
 
-/** Signs a grant with a fresh key pair. The private key is dropped here: narrowing a Biscuit doesn't need it. */
-export async function sign(spec: AppSpec, lines: string[]) {
+/** Mints a token with a fresh key pair. The private key is dropped here: attenuating a Biscuit doesn't need it. */
+export async function mint(specs: AppSpec[], lines: string[]) {
   const b = await load();
-  const block = need(lines, spec, false);
+  const block = need(lines, specs, false);
   const keys = new b.KeyPair(b.SignatureAlgorithm.Ed25519);
   const builder = b.Biscuit.builder();
   builder.addCode(blockCode(block));
@@ -61,10 +61,10 @@ export async function sign(spec: AppSpec, lines: string[]) {
   return { token: token.toBase64(), publicKey: keys.getPublicKey().toString().split("/")[1]! };
 }
 
-/** Appends a block of "Only…" lines. Anyone holding the token can do this; no key is involved. */
-export async function narrow(spec: AppSpec, token: string, publicKey: string, lines: string[]) {
+/** Appends a block of restrictions, giving a new token. Anyone holding the original can do this; no key is involved. */
+export async function attenuate(specs: AppSpec[], token: string, publicKey: string, lines: string[]) {
   const b = await load();
-  const block = need(lines, spec, true);
+  const block = need(lines, specs, true);
   const parsed = b.Biscuit.fromBase64(token, b.PublicKey.fromString(publicKey, b.SignatureAlgorithm.Ed25519));
   const builder = new b.BlockBuilder();
   builder.addCode(blockCode(block));
@@ -81,13 +81,16 @@ export type Verdict =
  * sentences it carries (so what is displayed is what is enforced), then let Biscuit decide.
  */
 export async function authorize(
-  spec: AppSpec,
+  specs: AppSpec[],
   token: string,
   publicKey: string,
+  appId: string,
   actionId: string,
   args: Record<string, string>,
 ): Promise<Verdict> {
   const b = await load();
+  const spec = specs.find((s) => s.id === appId);
+  if (!spec) throw new Error(`No app ${appId} among the ones given.`);
   const action = spec.actions.find((a) => a.id === actionId);
   if (!action) throw new Error(`${spec.name} has no action ${actionId}.`);
 
@@ -103,7 +106,7 @@ export async function authorize(
     const source = biscuit.getBlockSource(i);
     // Biscuit prints strings unescaped, so a sentence is everything between the first quote and the closing `");`.
     const sentences = source.split("\n").flatMap((l) => /^sentence\(\d+, "(.*)"\);$/.exec(l)?.[1] ?? []);
-    const parsed = parseBlock(sentences, spec, i > 0);
+    const parsed = parseBlock(sentences, specs, i > 0);
     const expected = new b.BlockBuilder();
     if (parsed.ok) expected.addCode(blockCode(parsed.lines));
     if (!parsed.ok || expected.toString() !== source) {
@@ -112,7 +115,7 @@ export async function authorize(
     blocks.push(parsed.lines);
   }
 
-  const facts = [`action(${JSON.stringify(action.id)})`, `time(${new Date().toISOString().slice(0, 19)}Z)`];
+  const facts = [`app(${JSON.stringify(spec.id)})`, `action(${JSON.stringify(action.id)})`, `time(${new Date().toISOString().slice(0, 19)}Z)`];
   for (const p of action.params) {
     const raw = (args[p.name] ?? "").trim();
     if (raw === "") continue; // An absent argument fails any check that mentions it.
@@ -126,14 +129,14 @@ export async function authorize(
   }
 
   const authorizer = new b.AuthorizerBuilder();
-  // The whole policy: a request passes if the grant holds a right for its action. Rights only count from the
-  // first block, which Biscuit enforces by not trusting facts from appended ones.
-  authorizer.addCode(`${facts.join(";\n")};\nallow if action($a), right($a);\ndeny if true;`);
+  // The whole policy: a request passes if the token holds a right for its app and action. Rights only count
+  // from the first block, which Biscuit enforces by not trusting facts from appended ones.
+  authorizer.addCode(`${facts.join(";\n")};\nallow if app($p), action($a), right($p, $a);\ndeny if true;`);
   try {
     // Biscuit's default budget is 1ms of evaluation, which a cold start can exceed; these policies are tiny, so
     // a generous ceiling costs nothing.
     authorizer.buildAuthenticated(biscuit).authorizeWithLimits({ max_facts: 1000, max_iterations: 100, max_time_micro: 1_000_000 });
-    const by = blocks[0]!.find((l) => l.line.kind === "may" && l.line.action === action.id);
+    const by = blocks[0]!.find((l) => l.line.kind === "may" && l.line.app === spec.id && l.line.action === action.id);
     return { verdict: "allowed", by: by?.text ?? "" };
   } catch (e) {
     const failure = (e as { FailedLogic?: { Unauthorized?: { policy: { Allow?: number; Deny?: number }; checks: { Block?: { block_id: number; check_id: number } }[] } } })

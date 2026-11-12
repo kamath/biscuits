@@ -15,16 +15,18 @@ async function ok<T>(response: Promise<Response>): Promise<T> {
 
 type In<F> = InferRequestType<F> extends { json: infer J } ? J : never;
 type Out<F> = InferResponseType<F, 200>;
-type Apps = Routes["apps"]["$post"];
+type List = Routes["apps"]["$get"];
+type Generate = Routes["apps"]["$post"];
 type Draft = Routes["grants"]["draft"]["$post"];
-type Sign = Routes["grants"]["$post"];
-type Narrow = Routes["grants"]["narrow"]["$post"];
+type Mint = Routes["tokens"]["$post"];
+type Attenuate = Routes["tokens"]["attenuate"]["$post"];
 type Send = Routes["requests"]["$post"];
 
 export const api = {
-  generateApp: (json: In<Apps>) => ok<Out<Apps>>(routes().apps.$post({ json })),
+  listApps: () => ok<Out<List>>(routes().apps.$get()),
+  generateApp: (json: In<Generate>) => ok<Out<Generate>>(routes().apps.$post({ json })),
   draftGrant: (json: In<Draft>) => ok<Out<Draft>>(routes().grants.draft.$post({ json })),
-  signGrant: (json: In<Sign>) => ok<Out<Sign>>(routes().grants.$post({ json })),
-  narrowGrant: (json: In<Narrow>) => ok<Out<Narrow>>(routes().grants.narrow.$post({ json })),
+  mintToken: (json: In<Mint>) => ok<Out<Mint>>(routes().tokens.$post({ json })),
+  attenuateToken: (json: In<Attenuate>) => ok<Out<Attenuate>>(routes().tokens.attenuate.$post({ json })),
   sendRequest: (json: In<Send>) => ok<Out<Send>>(routes().requests.$post({ json })),
 };
