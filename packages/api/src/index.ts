@@ -10,7 +10,7 @@ import type { Context } from "hono";
 import { ask, estimate, MODEL, price } from "./ai.ts";
 import { attenuate, authorize, forge, inspect, mint, newKey } from "./biscuit.ts";
 import * as catalog from "./catalog.ts";
-import { parseGrant, qualify, render, type AppSpec } from "./grammar.ts";
+import { blockCode, parseBlock, qualify, render, type AppSpec } from "./grammar.ts";
 import * as prompts from "./prompts.ts";
 import { appDraftSchema, grantDraftSchema, requestDraftSchema, toLines, toRequest, toSpec } from "./spec.ts";
 
@@ -68,7 +68,19 @@ const Verdict = z
     z.object({ verdict: z.literal("invalid"), reason: z.string() }),
   ])
   .openapi("Verdict");
-const PresetToken = z.object({ id: z.string(), name: z.string(), appIds: z.array(z.string()), lines: z.array(z.string()), token: Token, publicKey: PublicKey }).openapi("PresetToken");
+const PresetToken = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    parentId: z.string().nullable().openapi({ description: "The preset this one was made from; null for one the user signed." }),
+    how: z.enum(["attenuated", "edited"]).nullable(),
+    appIds: z.array(z.string()),
+    blocks: z.array(z.array(z.string())).openapi({ description: "Qualified sentences per block: what was signed, then each attenuation." }),
+    raw: z.string().optional().openapi({ description: "For an edited token: its Datalog as written." }),
+    token: Token,
+    publicKey: PublicKey,
+  })
+  .openapi("PresetToken");
 
 const json = <T extends z.ZodType>(schema: T, description: string) => ({ content: { "application/json": { schema } }, description });
 const body = <T extends z.ZodType>(schema: T) => ({ body: { content: { "application/json": { schema } }, required: true } });
@@ -84,17 +96,29 @@ let demo: Promise<{ key: { privateKey: string; publicKey: string }; tokens: z.in
 const demoUser = () =>
   (demo ??= (async () => {
     const key = await newKey();
-    const tokens = await Promise.all(
-      catalog.tokens.map(async (t) => {
-        const grants = t.grantIds.map((id) => catalog.grants.find((g) => g.id === id)!);
-        const specs = catalog.apps.filter((a) => grants.some((g) => g.appId === a.id));
-        const lines = grants.flatMap((g) => {
-          const parsed = parseGrant(g.lines, catalog.apps.find((a) => a.id === g.appId)!);
-          return parsed.ok ? parsed.lines.map((l) => qualify(l.line, catalog.apps)) : [];
-        });
-        return { id: t.id, name: t.name, appIds: specs.map((a) => a.id), lines, ...(await mint(specs, lines, key.privateKey)) };
-      }),
-    );
+    // In catalogue order, which puts every token after the one it was made from.
+    const tokens: z.infer<typeof PresetToken>[] = [];
+    for (const t of catalog.tokens) {
+      if ("lines" in t) {
+        const parsed = parseBlock(t.lines, catalog.apps, false);
+        const appIds = parsed.ok ? [...new Set(parsed.lines.flatMap((l) => (l.line.app ? [l.line.app] : [])))] : [];
+        const specs = catalog.apps.filter((a) => appIds.includes(a.id));
+        tokens.push({ id: t.id, name: t.name, parentId: null, how: null, appIds, blocks: [t.lines], ...(await mint(specs, t.lines, key.privateKey)) });
+        continue;
+      }
+      const parent = tokens.find((p) => p.id === t.from)!;
+      const specs = catalog.apps.filter((a) => parent.appIds.includes(a.id));
+      const base = { id: t.id, name: t.name, parentId: parent.id, appIds: parent.appIds, publicKey: key.publicKey };
+      if ("restrict" in t) {
+        // No key here: this is what any holder of the parent can do.
+        tokens.push({ ...base, how: "attenuated", blocks: [...parent.blocks, t.restrict], ...(await attenuate(specs, parent.token, key.publicKey, t.restrict)) });
+      } else {
+        const first = parseBlock(parent.blocks[0]!, specs, false);
+        const raw = `${first.ok ? blockCode(first.lines) : ""}\n${t.forge}`;
+        // Signed with a throwaway key, which is all someone without the user's can do.
+        tokens.push({ ...base, how: "edited", blocks: [[]], raw, ...(await forge(raw)) });
+      }
+    }
     return { key, tokens };
   })());
 

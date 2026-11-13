@@ -1,48 +1,57 @@
-import { Link } from "@tanstack/react-router";
+import { Button } from "@base-ui/react/button";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
 import { spendAtom } from "../lib/state.ts";
 import { Modals } from "./dialogs.tsx";
+import { ActionButton, Kbd, KeyBar, KeyRoot, releaseFocus, useAction } from "./keys.tsx";
+import { Palette, paletteAction } from "./palette.tsx";
 import { usd } from "./shared.tsx";
-
-const NAV = [
-  { to: "/", label: "Playground", exact: true },
-  { to: "/tokens", label: "Tokens", exact: false },
-  { to: "/apps", label: "Apps", exact: false },
-] as const;
+import { tab } from "./tw.ts";
 
 export function Layout({ children }: { children: ReactNode }) {
   const spend = useAtomValue(spendAtom);
+  const navigate = useNavigate();
+  const inApps = useRouterState({ select: (s) => s.location.pathname.startsWith("/apps") });
+  const board = useAction({ id: "nav.board", label: "Board", keys: ["1"], group: "Navigate", run: () => void navigate({ to: "/", search: {} }) });
+  const apps = useAction({ id: "nav.apps", label: "Apps", keys: ["2"], group: "Navigate", run: () => void navigate({ to: "/apps" }) });
   return (
-    <div className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
-      <header className="flex items-center justify-between gap-3 bg-paper px-4 ring-1 ring-line md:px-8">
-        <div className="flex min-w-0 items-center gap-1 md:gap-5">
-          <span className="font-serif text-xl font-semibold tracking-tight max-sm:hidden">Biscuits</span>
-          <nav className="flex" aria-label="Sections">
-            {NAV.map((n) => (
-              <Link
-                key={n.to}
-                to={n.to}
-                activeOptions={{ exact: n.exact }}
-                className="flex min-h-12 items-center border-b-2 border-transparent px-3 font-medium text-muted hover:text-ink data-[status=active]:border-accent data-[status=active]:text-ink"
-              >
-                {n.label}
-              </Link>
-            ))}
-          </nav>
+    <div className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
+      <header className="flex items-stretch bg-bar">
+        <span className="flex items-center px-3.5 font-serif text-lg font-semibold max-sm:hidden">Biscuits</span>
+        <nav className="flex" aria-label="Sections">
+          {[
+            { action: board, active: !inApps },
+            { action: apps, active: inApps },
+          ].map(({ action, active }) => (
+            <Button
+              key={action.id}
+              className={`${tab} gap-2`}
+              data-active={active ? "" : undefined}
+              aria-current={active ? "page" : undefined}
+              onClick={(e) => {
+                releaseFocus(e);
+                action.run();
+              }}
+            >
+              <span>{action.label}</span>
+              <Kbd keys={action.keys} />
+            </Button>
+          ))}
+        </nav>
+        <div className="ml-auto flex items-center gap-2 px-1.5">
+          {spend.calls > 0 && (
+            <p className="truncate px-2 text-[0.85rem] text-muted" title={`${spend.calls} model ${spend.calls === 1 ? "call" : "calls"} from this tab`}>
+              Model calls: {usd(spend.usd)}
+            </p>
+          )}
+          <ActionButton action={paletteAction} />
         </div>
-        {spend.calls > 0 && (
-          <p className="truncate text-[0.85rem] text-muted" title="What this tab's model calls have cost so far">
-            <span className="max-md:hidden">Model calls so far: </span>
-            {usd(spend.usd)}
-            <span className="max-md:hidden">
-              {" "}
-              over {spend.calls} {spend.calls === 1 ? "call" : "calls"}
-            </span>
-          </p>
-        )}
       </header>
       <main className="min-h-0">{children}</main>
+      <KeyBar className="max-md:hidden" />
+      <KeyRoot />
+      <Palette />
       <Modals />
     </div>
   );

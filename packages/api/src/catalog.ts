@@ -119,11 +119,44 @@ export const requests: { id: string; name: string; app: string; action: string; 
   { id: "delete-files", name: "Delete everything in /tmp", app: "drive", action: "delete_file", args: { folder: "/tmp" } },
 ];
 
-/** Tokens minted when the catalogue is first asked for, so there is something to try straight away. */
-export const tokens: { id: string; name: string; grantIds: string[] }[] = [
-  { id: "preset-rent", name: "Pay the rent", grantIds: ["pay-rent"] },
-  { id: "preset-bank-read", name: "Bank, look only", grantIds: ["bank-read"] },
-  { id: "preset-rent-mail", name: "Rent and team mail", grantIds: ["pay-rent", "team-mail", "team-reply"] },
-  { id: "preset-work", name: "Work assistant", grantIds: ["team-mail", "team-reply", "work-calendar", "shared-files"] },
-  { id: "preset-careless", name: "Pay anyone, any amount", grantIds: ["pay-anyone"] },
+/**
+ * The tokens the demo opens on, which tell one story. The user signs a single broad token for their assistant.
+ * The assistant hands each errand a narrower copy, which takes no key and no word from the user. Someone edits
+ * a copy to say more, and can't sign it. `from` names the token a copy was made from.
+ */
+export type PresetToken =
+  | { id: string; name: string; lines: string[] }
+  | { id: string; name: string; from: string; restrict: string[] }
+  | { id: string; name: string; from: string; forge: string };
+
+export const tokens: PresetToken[] = [
+  {
+    id: "assistant",
+    name: "Assistant",
+    lines: [
+      "On Harbor Bank, it may view balances",
+      "On Harbor Bank, it may list transactions",
+      "On Harbor Bank, it may send payments",
+      "On Quill Mail, it may read messages",
+      "On Quill Mail, it may send messages",
+      "On Daybook, it may view events",
+      "On Daybook, it may create events",
+      "On Stacks, it may read files",
+    ],
+  },
+  {
+    id: "rent",
+    name: "Rent errand",
+    from: "assistant",
+    restrict: ["Only on Harbor Bank", 'On Harbor Bank, only send payments where payee is "landlord"', "On Harbor Bank, only send payments where amount is at most 2000"],
+  },
+  {
+    id: "inbox",
+    name: "Inbox triage",
+    from: "assistant",
+    restrict: ["Only on Quill Mail", 'On Quill Mail, only read messages where sender ends with "@example.com"', 'On Quill Mail, only send messages where recipient ends with "@example.com"'],
+  },
+  { id: "scheduling", name: "Scheduling", from: "assistant", restrict: ["Only on Daybook", 'On Daybook, only create events where calendar is "work"'] },
+  // Appended to the assistant's own Datalog: a right nobody signed.
+  { id: "forged", name: "Assistant, forged", from: "assistant", forge: 'right("bank", "close_account");' },
 ];
