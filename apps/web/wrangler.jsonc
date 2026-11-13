@@ -1,3 +1,5 @@
+// The Worker. In the Cloudflare dashboard the project's root directory is apps/web, so Workers Builds runs
+// `pnpm run build` and `npx wrangler deploy` here; wrangler then finds the config the build generated.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "biscuits",
