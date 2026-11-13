@@ -44,7 +44,7 @@ function Conversation() {
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_22rem] lg:grid-cols-[minmax(0,1fr)_27rem]">
       <section className="flex min-h-0 min-w-0 flex-col" aria-label="Conversation">
-        <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-6 md:px-8">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-none px-4 py-6 md:px-8">
           <div className="flex max-w-3xl flex-col gap-6">
             {turns.length === 0 ? (
               <div className="flex flex-col gap-5 pt-[4vh]">
@@ -226,7 +226,7 @@ function Inspector({ tokens, held, apps, bare }: { tokens: Token[]; held: Token;
     </Button>
   );
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className={bare ? "flex flex-col" : "min-h-0 flex-1 overflow-auto overscroll-none"}>
       <div className={`flex flex-col gap-3 pb-4 ${bare ? "" : "px-4 pt-5 lg:px-8"}`}>
         {!bare && (
           <div className="flex min-h-8 items-center justify-between gap-2">
@@ -249,7 +249,7 @@ function Inspector({ tokens, held, apps, bare }: { tokens: Token[]; held: Token;
         </div>
         <p className="text-[0.85rem] text-muted">Attenuating makes a narrower copy to hand on. It can add limits to this token, never lift one.</p>
       </div>
-      <div className={bare ? "" : "min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-6 lg:px-8"}>
+      <div className={bare ? "" : "px-4 pb-6 lg:px-8"}>
         <PassBody token={held} specs={apps.filter((a) => held.appIds.includes(a.id))} showDatalog={datalog} />
       </div>
     </div>

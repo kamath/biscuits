@@ -82,6 +82,11 @@
   #root {
     height: 100%;
   }
+  /* No rubber-band bounce: the page itself never scrolls, and panes stop dead at their ends. */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
   body {
     background: var(--page);
     color: var(--ink);
