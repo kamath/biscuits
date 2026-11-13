@@ -39,7 +39,8 @@ export function useWorld() {
     ...(q.data?.tokens ?? []).map((t): Token => ({ id: t.id, name: t.name, parentId: null, how: null, appIds: t.appIds, blocks: [t.lines], token: t.token, publicKey: t.publicKey, preset: true })),
     ...myTokens,
   ];
-  const held = tokens.find((t) => t.id === heldId) ?? tokens[0];
+  // No default: the agent holds nothing until a token is chosen for it.
+  const held = tokens.find((t) => t.id === heldId);
   return { q, apps, generated, grants, tokens, held, samples: q.data?.requests ?? [], key: q.data?.key };
 }
 

@@ -48,7 +48,7 @@ export const generatedAppsAtom = atom<AppSpec[]>([]);
 export const grantsAtom = atom<Grant[]>([]);
 export const tokensAtom = atom<Token[]>([]);
 export const turnsAtom = atom<Turn[]>([]);
-/** The token the agent is holding in the playground. Null means the first one. */
+/** The token the agent last held in the playground. Null until one is chosen: there is no default. */
 export const heldTokenAtom = atom<string | null>(null);
 /** What the model calls made from this tab have cost so far. */
 export const spendAtom = atom({ usd: 0, calls: 0 });
