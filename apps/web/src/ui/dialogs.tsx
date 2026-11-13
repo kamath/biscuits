@@ -114,7 +114,7 @@ function LineErrors({ text, parsed }: { text: string; parsed: ParsedBlock }) {
 }
 
 const LeftOut = ({ items }: { items: string[] }) =>
-  items.length > 0 && <p className="rounded-lg bg-warn-soft px-3 py-2 text-warn">These lines can't express the following, so the draft leaves it out: {items.join("; ")}.</p>;
+  items.length > 0 && <p className="rounded-lg bg-warn-soft px-3 py-2 text-warn">Left out, because no line can say it: {items.join("; ")}.</p>;
 
 const Footer = ({ children }: { children: ReactNode }) => <div className="flex flex-wrap items-center justify-end gap-2 pt-1">{children}</div>;
 
@@ -155,7 +155,7 @@ function DraftStep({
         </Button>
         <EstimateNote kind={kind} />
       </div>
-      {cost && <CostNote cost={cost} what="That draft" />}
+      {cost && <CostNote cost={cost} />}
     </form>
   );
 }
@@ -183,7 +183,7 @@ function NewApp({ onClose }: { onClose: () => void }) {
     onError: fail,
   });
   return (
-    <Modal onClose={onClose} title="Generate an app" description="The model invents a service of the kind you name, with actions an agent could take on it." initialFocus={field}>
+    <Modal onClose={onClose} title="Generate an app" initialFocus={field}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -217,7 +217,7 @@ function EditTurn({ turn, onClose }: { turn: Turn; onClose: () => void }) {
   const token = tokens.find((t) => t.id === turn.tokenId) ?? held;
   if (!token) return null;
   return (
-    <Modal onClose={onClose} title="Change the values and send again" description={`${app.name}, ${action.phrase}. Sent with “${token.name}”.`} initialFocus={first}>
+    <Modal onClose={onClose} title="Change the values" description={`${app.name}, ${action.phrase}, holding “${token.name}”.`} initialFocus={first}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -289,7 +289,6 @@ function GrantEditor({ app, grant, onClose }: { app: AppSpec; grant?: Grant; onC
       >
         <LinesField
           label="The lines, one per row"
-          hint="Write them yourself or edit the draft. Each must match one of the app's sentences."
           name="lines"
           value={text}
           onChange={(e) => setText(e.currentTarget.value)}
@@ -348,7 +347,7 @@ function DescribeToken({ hold, onClose }: { hold?: boolean; onClose: () => void 
   });
   const example = apps[0] ? `On ${apps[0].name}, it may ${apps[0].actions[0]!.phrase}` : "";
   return (
-    <Modal onClose={onClose} title="Describe a new token" description="Say what the agent should be allowed to do. The model drafts the lines; you read them, change what you like, and sign." initialFocus={field} wide>
+    <Modal onClose={onClose} title="Describe a new token" initialFocus={field} wide>
       <DraftStep
         inputRef={field}
         label="What should the agent be allowed to do, across your apps?"
@@ -367,7 +366,7 @@ function DescribeToken({ hold, onClose }: { hold?: boolean; onClose: () => void 
           if (parsed.ok && !draft.isPending && !mint.isPending) mint.mutate(parsed.lines.map((l) => l.text));
         }}
       >
-        <LinesField label="The lines to sign, one per row" hint="Write them yourself or edit the draft. Each names its app." name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder={example} />
+        <LinesField label="The lines to sign, one per row" name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder={example} />
         <LineErrors text={text} parsed={parsed} />
         <LeftOut items={left} />
         {parsed.ok && <Findings findings={audit([parsed.lines], apps)} />}
@@ -415,7 +414,7 @@ function Mint({ preselect, hold, onClose }: { preselect?: string; hold?: boolean
     onError: fail,
   });
   return (
-    <Modal onClose={onClose} title="Mint a token from grants" description="Tick the grants to sign together. They can belong to different apps." initialFocus={field}>
+    <Modal onClose={onClose} title="Mint a token from grants" initialFocus={field}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -505,7 +504,7 @@ function Attenuate({ token, hold, retry, onClose }: { token: Token; hold?: boole
     <Modal
       onClose={onClose}
       title="Narrow this token (attenuate)"
-      description={`Add restrictions and you get a new token that can only do less. Anyone holding “${token.name}” can do this without your key, and the original is unchanged.${retry ? ` The agent then tries “${retry.text}” again with the narrower one.` : ""}`}
+      description={`A weaker copy of “${token.name}”. The original keeps working.`}
       initialFocus={field}
       wide
     >
@@ -516,20 +515,24 @@ function Attenuate({ token, hold, retry, onClose }: { token: Token; hold?: boole
           if (parsed.ok && !attenuate.isPending) attenuate.mutate(parsed.lines.map((l) => l.text));
         }}
       >
-        <LinesField ref={field} label="Restrictions to add, one per row" name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder={examples.join("\n")} />
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[0.9rem] text-muted">Add one:</span>
-          {examples.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setText((t) => (t.trim() ? `${t.trimEnd()}\n${s}` : s))}
-              className="min-h-9 cursor-pointer rounded-lg bg-well px-2.5 py-1 text-left font-serif ring-1 ring-line ring-inset hover:bg-accent-soft hover:text-accent"
-            >
-              {s}
-            </button>
-          ))}
+        {/* Pressing one is the way in; the field below is for anyone who would rather write the line. */}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Limits to add">
+          {examples.map((s) => {
+            const on = splitLines(text).includes(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setText((t) => (on ? splitLines(t).filter((l) => l !== s).join("\n") : t.trim() ? `${t.trimEnd()}\n${s}` : s))}
+                className="min-h-9 cursor-pointer rounded-lg bg-well px-2.5 py-1 text-left font-serif ring-1 ring-line ring-inset hover:bg-accent-soft hover:text-accent aria-pressed:bg-accent-soft aria-pressed:text-accent aria-pressed:ring-accent"
+              >
+                {s}
+              </button>
+            );
+          })}
         </div>
+        <LinesField ref={field} label="Limits to add, one per row" rows={3} name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} />
         <LineErrors text={text} parsed={parsed} />
         <Footer>
           <Button onClick={onClose}>Cancel</Button>
@@ -604,7 +607,6 @@ function EditToken({ token, hold, retry, onClose }: { token?: Token; hold?: bool
         wrap="soft"
         className="break-all"
         label="The token's text"
-        hint="This is the whole signed token. Change any character and its signature stops matching."
         name="raw"
         value={raw}
         onChange={(e) => setRaw(e.currentTarget.value)}
@@ -621,7 +623,7 @@ function EditToken({ token, hold, retry, onClose }: { token?: Token; hold?: bool
 
   if (!token) {
     return (
-      <Modal onClose={onClose} title="Paste a token" description="It is checked against your key. If it doesn't verify, you can still hand it to the agent and watch it be refused." wide>
+      <Modal onClose={onClose} title="Paste a token" wide>
         {rawForm}
       </Modal>
     );
@@ -629,8 +631,8 @@ function EditToken({ token, hold, retry, onClose }: { token?: Token; hold?: bool
   return (
     <Modal
       onClose={onClose}
-      title="Edit this token by hand"
-      description={`This is what tampering looks like. You get a new token; “${token.name}” is left as it was.${token.blocks.length > 1 ? " Its attenuations aren't carried over." : ""}${retry ? ` The agent then tries “${retry.text}” again with the edited one.` : ""}`}
+      title="Tamper with this token"
+      description={`An edited copy of “${token.name}”. The original keeps working.${token.blocks.length > 1 ? " Its attenuations aren't carried over." : ""}`}
       wide
     >
       <Tabs.Root defaultValue="datalog" className="flex flex-col gap-3">
@@ -654,15 +656,11 @@ function EditToken({ token, hold, retry, onClose }: { token?: Token; hold?: bool
               code
               rows={10}
               label="What the token says"
-              hint="Each sentence is followed by the Datalog it compiled to. Try raising a limit, or adding a right with no sentence."
+              hint="Try raising a limit."
               name="code"
               value={code}
               onChange={(e) => setCode(e.currentTarget.value)}
             />
-            <p className="text-[0.9rem] text-muted">
-              Saved without re-signing, it carries a signature that isn't yours, as a forger's would. Re-signed, the signature is yours again, but a service still compares each
-              sentence with its Datalog.
-            </p>
             <Footer>
               <Button onClick={onClose}>Cancel</Button>
               <Button disabled={!code.trim() || busy} onClick={() => forge.mutate(false)}>

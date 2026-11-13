@@ -75,10 +75,10 @@ export function EstimateNote({ kind, phrase = (cost) => `Uses the model: about $
   );
 }
 
-/** What a finished model call actually cost. */
-export const CostNote = ({ cost, what = "That" }: { cost: Cost; what?: string }) => (
-  <p className="text-[0.85rem] text-muted">
-    {what} cost {usd(cost.usd)} ({cost.inputTokens.toLocaleString()} tokens in, {cost.outputTokens.toLocaleString()} out{cost.basis === "billed" ? ", as billed" : ""}).
+/** What a finished model call actually cost; the token counts behind it are on hover. */
+export const CostNote = ({ cost }: { cost: Cost }) => (
+  <p className="text-[0.85rem] text-muted" title={`${cost.inputTokens.toLocaleString()} tokens in, ${cost.outputTokens.toLocaleString()} out${cost.basis === "billed" ? ", as billed" : ""}`}>
+    Model call: {usd(cost.usd)}
   </p>
 );
 

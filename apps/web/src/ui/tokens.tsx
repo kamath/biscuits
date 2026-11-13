@@ -20,13 +20,9 @@ export function TokensPage() {
   return (
     <Page>
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex max-w-[60ch] flex-col gap-1">
-          <h1 className="text-2xl font-semibold">Tokens</h1>
-          <p className="text-muted">
-            A <Term k="token">token</Term> is a set of lines you <Term k="signed">signed</Term>, saying what an agent may do. It can cover several apps, and anyone holding one can{" "}
-            <Term k="attenuate">attenuate</Term> it into a narrower one.
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold">
+          <Term k="token">Tokens</Term>
+        </h1>
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" disabled={!q.data} onClick={() => setModal({ kind: "describeToken" })}>
             Describe a new token
@@ -119,7 +115,7 @@ export function TokenPage({ tokenId }: { tokenId: string }) {
           <Button disabled={!sound(token)} onClick={() => setModal({ kind: "attenuate", tokenId: token.id })}>
             Attenuate
           </Button>
-          <Button onClick={() => setModal({ kind: "editToken", tokenId: token.id })}>Edit by hand</Button>
+          <Button onClick={() => setModal({ kind: "editToken", tokenId: token.id })}>Tamper</Button>
           <Button onClick={() => void copy(token.token, "the token")}>Copy</Button>
           {!token.raw && (
             <Button variant="quiet" onClick={() => setDatalog((d) => !d)} aria-pressed={datalog}>

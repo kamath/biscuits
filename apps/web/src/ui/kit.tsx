@@ -184,14 +184,6 @@ const GLOSSARY = {
     title: "Signed",
     says: "You hold a private key and sign each token with it. A service that knows your public key can tell the token came from you and hasn't been altered, without contacting you.",
   },
-  mint: {
-    title: "Mint",
-    says: "To create a token and sign it with your key. Only you can mint. Anyone holding a token can attenuate it.",
-  },
-  attenuate: {
-    title: "Attenuate",
-    says: "To add restrictions to a token, which gives a new token that can do less. Any holder can do it, without your key and without asking the service. Taking a restriction back out would break the signature.",
-  },
   datalog: {
     title: "Datalog",
     says: "The logic language a Biscuit is written in, and what a service actually evaluates. Each sentence here stands for exactly one Datalog statement. The English is this demo's layer on top: Biscuit itself knows only the Datalog.",
