@@ -1,10 +1,10 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
-import { heldTokenAtom, modalAtom, tokensAtom, type Token } from "../lib/state.ts";
+import { heldTokenAtom, modalAtom, type Token } from "../lib/state.ts";
 import { Button, QueryState, Tag } from "./kit.tsx";
-import { Pass } from "./pass.tsx";
-import { copy, newId, useWorld } from "./shared.tsx";
+import { auditToken, Pass } from "./pass.tsx";
+import { copy, sound, useWorld } from "./shared.tsx";
 
 export const Page = ({ children }: { children: React.ReactNode }) => (
   <div className="h-full overflow-auto overscroll-contain">
@@ -31,6 +31,9 @@ export function TokensPage() {
           <Button disabled={!q.data} onClick={() => setModal({ kind: "mint" })}>
             Mint from grants
           </Button>
+          <Button disabled={!q.data} onClick={() => setModal({ kind: "editToken" })}>
+            Paste one in
+          </Button>
         </div>
       </header>
       <QueryState q={q} what="the preset tokens">
@@ -48,10 +51,10 @@ export function TokensPage() {
                       ))}
                   </span>
                   <span className="text-[0.9rem] text-muted">
-                    {lineCount(t)} {lineCount(t) === 1 ? "line" : "lines"}
+                    {t.how === "edited" || t.how === "pasted" ? (t.how === "edited" ? "Edited by hand" : "Pasted in") : `${lineCount(t)} ${lineCount(t) === 1 ? "line" : "lines"}`}
                     {t.how === "attenuated" && ", attenuated"}
-                    {t.how === "tampered" && ", tampered with"}
                     {t.preset && ", preset"}
+                    {auditToken(t, apps).some((f) => f.level === "broad") && <span className="text-warn">, very broad</span>}
                   </span>
                 </Link>
               </li>
@@ -66,7 +69,6 @@ export function TokensPage() {
 export function TokenPage({ tokenId }: { tokenId: string }) {
   const { q, apps, tokens } = useWorld();
   const setModal = useSetAtom(modalAtom);
-  const setTokens = useSetAtom(tokensAtom);
   const setHeld = useSetAtom(heldTokenAtom);
   const navigate = useNavigate();
   const [datalog, setDatalog] = useState(true);
@@ -94,15 +96,6 @@ export function TokenPage({ tokenId }: { tokenId: string }) {
       </Page>
     );
   }
-  const tampered = token.how === "tampered";
-  const tamper = () => {
-    // Flip one character in the middle, as someone editing the token by hand would. The original is kept.
-    const i = Math.floor(token.token.length / 2);
-    const changed = token.token.slice(0, i) + (token.token[i] === "A" ? "B" : "A") + token.token.slice(i + 1);
-    const id = newId();
-    setTokens((all) => [...all, { ...token, id, name: `${token.name}, tampered`.slice(0, 80), parentId: token.id, how: "tampered", token: changed, preset: false }]);
-    void navigate({ to: "/tokens/$tokenId", params: { tokenId: id } });
-  };
   return (
     <Page>
       {back}
@@ -118,16 +111,16 @@ export function TokenPage({ tokenId }: { tokenId: string }) {
           >
             Try it in the playground
           </Button>
-          <Button disabled={tampered} onClick={() => setModal({ kind: "attenuate", tokenId: token.id })}>
+          <Button disabled={!sound(token)} onClick={() => setModal({ kind: "attenuate", tokenId: token.id })}>
             Attenuate
           </Button>
-          <Button disabled={tampered} onClick={tamper}>
-            Tamper with a copy
-          </Button>
+          <Button onClick={() => setModal({ kind: "editToken", tokenId: token.id })}>Edit by hand</Button>
           <Button onClick={() => void copy(token.token, "the token")}>Copy</Button>
-          <Button variant="quiet" onClick={() => setDatalog((d) => !d)} aria-pressed={datalog}>
-            {datalog ? "Hide the Datalog" : "Show the Datalog"}
-          </Button>
+          {!token.raw && (
+            <Button variant="quiet" onClick={() => setDatalog((d) => !d)} aria-pressed={datalog}>
+              {datalog ? "Hide the Datalog" : "Show the Datalog"}
+            </Button>
+          )}
           {/* Preset tokens come from the API and stay. */}
           {!token.preset && (
             <Button variant="danger" onClick={() => setModal({ kind: "deleteToken", tokenId: token.id })}>

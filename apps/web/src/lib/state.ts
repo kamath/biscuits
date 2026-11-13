@@ -10,7 +10,13 @@ export type Token = {
   name: string;
   /** The token this one was made from, and how. */
   parentId: string | null;
-  how: "attenuated" | "tampered" | null;
+  how: "attenuated" | "edited" | "pasted" | null;
+  /** For a token edited by hand: the Datalog as written, shown in place of sentences nobody compiled. */
+  raw?: string;
+  /** For an edited token: whether it was signed again with your key afterwards. */
+  resigned?: boolean;
+  /** For a pasted token: whether it verified under your key when it came in. */
+  verifies?: boolean;
   appIds: string[];
   /** Qualified sentences per block: what was signed first, then each attenuation. */
   blocks: string[][];
@@ -55,6 +61,8 @@ export type ModalState =
   | { kind: "describeToken"; hold?: boolean }
   | { kind: "mint"; grantId?: string; hold?: boolean }
   | { kind: "attenuate"; tokenId: string; hold?: boolean }
+  /** Edit a token's Datalog or raw text by hand. Without a token, paste one in. */
+  | { kind: "editToken"; tokenId?: string; hold?: boolean }
   /** Change the values of a request the agent already made, and send it again. */
   | { kind: "editTurn"; turnId: string }
   | { kind: "deleteApp"; appId: string }

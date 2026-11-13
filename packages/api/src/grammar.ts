@@ -6,7 +6,14 @@
 // and enforce only the qualified form.
 
 export type Param = { name: string; type: "string" | "number"; example: string };
-export type AppAction = { id: string; phrase: string; description: string; params: Param[] };
+export type AppAction = {
+  id: string;
+  phrase: string;
+  description: string;
+  params: Param[];
+  /** Moves money, speaks as the user, or destroys something: an action worth limiting. */
+  risky: boolean;
+};
 export type AppSpec = { id: string; name: string; kind: string; description: string; actions: AppAction[] };
 
 export type Op = "is" | "starts_with" | "ends_with" | "at_most" | "at_least";
@@ -204,3 +211,46 @@ export function templatesFor(action: AppAction): string[] {
 }
 
 export const splitLines = (text: string) => text.split("\n").map((l) => l.trim()).filter(Boolean);
+
+export type Finding = {
+  /** The "may" sentence the finding is about, spelled as the lines given were. */
+  sentence: string;
+  /** broad: a risky action with nothing limiting it. loose: limited in part, or in a way that limits nothing. */
+  level: "broad" | "loose";
+  message: string;
+};
+
+const list = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`);
+
+/**
+ * Looks for permissions wider than anyone probably meant: a risky action with no limit on whom, how much or
+ * where. It reads only the lines, so it is the same check before signing and after. `blocks` are a token's
+ * blocks in order, or a single block for lines not yet signed; later blocks can only narrow.
+ */
+export function audit(blocks: BlockLine[][], specs: AppSpec[]): Finding[] {
+  const all = blocks.flat().map((l) => l.line);
+  const onlyApps = all.flatMap((l) => (l.kind === "app" ? [l.app] : []));
+  const findings: Finding[] = [];
+  for (const may of blocks[0] ?? []) {
+    const line = may.line;
+    if (line.kind !== "may") continue;
+    const action = specs.find((s) => s.id === line.app)?.actions.find((a) => a.id === line.action);
+    // An "Only on <other app>" line has already switched this permission off.
+    if (!action?.risky || onlyApps.some((a) => a !== line.app)) continue;
+    const limits = all.flatMap((l) => (l.kind === "where" && l.app === line.app && l.action === line.action ? [l] : []));
+    // A limit that every value passes is no limit.
+    const real = limits.filter((l) => !(typeof l.value === "string" && l.value === "" && l.op !== "is"));
+    const open = action.params.filter((p) => !real.some((l) => l.param === p.name)).map((p) => p.name);
+    const floorOnly = action.params.filter((p) => p.type === "number" && real.some((l) => l.param === p.name) && !real.some((l) => l.param === p.name && l.op !== "at_least")).map((p) => p.name);
+    if (action.params.length === 0) {
+      findings.push({ sentence: may.text, level: "loose", message: `Nothing about “${action.phrase}” can be limited, so this permits every use of it.` });
+    } else if (open.length === action.params.length) {
+      findings.push({ sentence: may.text, level: "broad", message: `No limit on ${list(open)}: it may ${action.phrase} with any ${list(open)} at all.` });
+    } else if (open.length > 0) {
+      findings.push({ sentence: may.text, level: "loose", message: `No limit on ${list(open)}.` });
+    } else if (floorOnly.length > 0) {
+      findings.push({ sentence: may.text, level: "loose", message: `${list(floorOnly)} has a minimum but no maximum.` });
+    }
+  }
+  return findings;
+}

@@ -23,6 +23,8 @@ type DraftToken = Routes["tokens"]["draft"]["$post"];
 type DraftRequest = Routes["requests"]["draft"]["$post"];
 type Mint = Routes["tokens"]["$post"];
 type Attenuate = Routes["tokens"]["attenuate"]["$post"];
+type Forge = Routes["tokens"]["forge"]["$post"];
+type Inspect = Routes["tokens"]["inspect"]["$post"];
 type Send = Routes["requests"]["$post"];
 
 export type Estimates = Out<GetEstimates>;
@@ -36,5 +38,7 @@ export const api = {
   draftRequest: (json: In<DraftRequest>) => ok<Out<DraftRequest>>(routes().requests.draft.$post({ json })),
   mintToken: (json: In<Mint>) => ok<Out<Mint>>(routes().tokens.$post({ json })),
   attenuateToken: (json: In<Attenuate>) => ok<Out<Attenuate>>(routes().tokens.attenuate.$post({ json })),
+  forgeToken: (json: In<Forge>) => ok<Out<Forge>>(routes().tokens.forge.$post({ json })),
+  inspectToken: (json: In<Inspect>) => ok<Out<Inspect>>(routes().tokens.inspect.$post({ json })),
   sendRequest: (json: In<Send>) => ok<Out<Send>>(routes().requests.$post({ json })),
 };

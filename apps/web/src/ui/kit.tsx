@@ -39,11 +39,12 @@ export function TextField({ label, hint, ...input }: { label: string; hint?: Rea
 }
 
 /** A multi-line field for sentences, one per row. They are set in the serif the signed lines use everywhere else. */
-export function LinesField({ label, hint, ...area }: { label: string; hint?: ReactNode } & ComponentProps<"textarea">) {
+export function LinesField({ label, hint, code, ...area }: { label: string; hint?: ReactNode; code?: boolean } & ComponentProps<"textarea">) {
   return (
     <Field.Root name={area.name} className="flex flex-col gap-1">
       <Field.Label className="text-[0.9rem] font-medium">{label}</Field.Label>
-      <Field.Control render={<textarea rows={6} spellCheck={false} {...area} />} className={`${field} resize-y font-serif leading-relaxed`} />
+      {/* Code keeps its own line breaks and scrolls sideways; sentences wrap. */}
+      <Field.Control render={<textarea rows={6} spellCheck={false} wrap={code ? "off" : undefined} {...area} />} className={`${field} resize-y ${code ? "font-mono text-[0.82rem] leading-relaxed" : "font-serif leading-relaxed"}`} />
       {hint && <Field.Description className="text-[0.85rem] text-muted">{hint}</Field.Description>}
     </Field.Root>
   );

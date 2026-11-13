@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import type { AgentRequest, Cost } from "api";
 import type { AppSpec } from "api/grammar";
 import { getDefaultStore, useAtomValue } from "jotai";
@@ -39,7 +40,19 @@ export function useWorld() {
     ...myTokens,
   ];
   const held = tokens.find((t) => t.id === heldId) ?? tokens[0];
-  return { q, apps, generated, grants, tokens, held, samples: q.data?.requests ?? [] };
+  return { q, apps, generated, grants, tokens, held, samples: q.data?.requests ?? [], key: q.data?.key };
+}
+
+/** Whether a token can still be parsed and extended: one that doesn't verify can't. */
+export const sound = (t: Token) => !(t.how === "edited" && !t.resigned) && !(t.how === "pasted" && !t.verifies);
+
+/** Where a freshly made token goes: into the agent's hand in the playground, or onto its own page. */
+export function useLand(hold?: boolean) {
+  const navigate = useNavigate();
+  return (tokenId: string) => {
+    if (hold) return void getDefaultStore().set(heldTokenAtom, tokenId);
+    void navigate({ to: "/tokens/$tokenId", params: { tokenId } });
+  };
 }
 
 /** "Harbor Bank" and "send payments", for a request against the apps it could be about. */

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { attenuate, authorize as run, mint, type Verdict } from "./biscuit.ts";
+import { attenuate, authorize as run, forge, inspect, mint, newKey, type Verdict } from "./biscuit.ts";
 import { apps, grants } from "./catalog.ts";
-import { parse, parseGrant, parseQualified, qualify, type AppSpec } from "./grammar.ts";
+import { audit, blockCode, parse, parseBlock, parseGrant, parseQualified, qualify, type AppSpec } from "./grammar.ts";
 
 /** The verdict without its trace and facts, which have their own test. */
 const authorize = async (...a: Parameters<typeof run>) => {
@@ -173,4 +173,66 @@ test("the preset requests and tokens refer to real apps, actions and grants", as
     for (const name of Object.keys(r.args)) assert.ok(action.params.some((p) => p.name === name), `${r.id}.${name}`);
   }
   for (const t of tokens) for (const id of t.grantIds) assert.ok(grants.some((g) => g.id === id), `${t.id}: ${id}`);
+});
+
+test("hand-edited Datalog is caught twice over: by the signature, then by its own sentences", async () => {
+  const key = await newKey();
+  const original = lines("pay-rent");
+  const signed = await mint([bank], original, key.privateKey);
+  assert.equal(signed.publicKey, key.publicKey);
+  const parsed = parseBlock(original, [bank], false);
+  assert.ok(parsed.ok);
+  const code = blockCode(parsed.lines);
+  const raised = code.replace("$v <= 2000", "$v <= 20000");
+  assert.notEqual(raised, code);
+
+  // Edited and not re-signed: whoever did it has no key of yours, so the signature is someone else's.
+  const unsigned = await forge(raised);
+  assert.equal((await run([bank], unsigned.token, key.publicKey, "bank", "send_payment", { payee: "landlord", amount: "9000" })).verdict, "invalid");
+  assert.equal((await inspect([bank], unsigned.token, key.publicKey)).verifies, false);
+
+  // Edited and re-signed with your key: the signature holds, but the Datalog no longer says what its sentence does.
+  const resigned = await forge(raised, key.privateKey);
+  const v = await run([bank], resigned.token, key.publicKey, "bank", "send_payment", { payee: "landlord", amount: "9000" });
+  assert.equal(v.verdict, "invalid");
+  assert.match(v.verdict === "invalid" ? v.reason : "", /doesn't match its own sentences/);
+  assert.equal((await inspect([bank], resigned.token, key.publicKey)).verifies, true);
+
+  // Sentence and Datalog changed together and re-signed: that is simply a new grant, honestly stated.
+  const honest = await forge(raised.replace("is at most 2000", "is at most 20000"), key.privateKey);
+  assert.equal((await run([bank], honest.token, key.publicKey, "bank", "send_payment", { payee: "landlord", amount: "9000" })).verdict, "allowed");
+  const read = await inspect([bank], honest.token, key.publicKey);
+  assert.deepEqual(read.appIds, ["bank"]);
+  assert.ok(read.blocks[0]!.includes("On Harbor Bank, only send payments where amount is at most 20000"));
+
+  await assert.rejects(forge("right(", key.privateKey), /isn't valid Datalog/);
+});
+
+test("the audit flags risky permissions with nothing limiting them", () => {
+  const block = (...texts: string[]) => {
+    const p = parseBlock(texts, both, false);
+    assert.ok(p.ok, texts.join("; "));
+    return p.lines;
+  };
+  const anyone = audit([block("On Harbor Bank, it may view balances", "On Harbor Bank, it may send payments")], both);
+  assert.deepEqual(anyone.map((f) => [f.level, f.sentence]), [["broad", "On Harbor Bank, it may send payments"]]);
+  assert.match(anyone[0]!.message, /any payee or amount/);
+
+  const partly = audit([block("On Harbor Bank, it may send payments", "On Harbor Bank, only send payments where amount is at most 50")], both);
+  assert.deepEqual(partly.map((f) => [f.level, f.message]), [["loose", "No limit on payee."]]);
+
+  assert.deepEqual(audit([block(...lines("pay-rent"))], both), []);
+  assert.deepEqual(audit([block(...lines("bank-read"))], both), []);
+
+  const floor = audit([block("On Harbor Bank, it may send payments", 'On Harbor Bank, only send payments where payee is "landlord"', "On Harbor Bank, only send payments where amount is at least 10")], both);
+  assert.deepEqual(floor.map((f) => f.message), ["amount has a minimum but no maximum."]);
+
+  // A later block can fix what the first left open, or switch the permission off altogether.
+  const narrowed = parseBlock(['On Harbor Bank, only send payments where payee is "landlord"', "On Harbor Bank, only send payments where amount is at most 50"], both, true);
+  const off = parseBlock(["Only on Quill Mail"], both, true);
+  assert.ok(narrowed.ok && off.ok);
+  const open = block("On Harbor Bank, it may send payments", "On Quill Mail, it may read messages");
+  assert.equal(audit([open], both).length, 1);
+  assert.deepEqual(audit([open, narrowed.lines], both), []);
+  assert.deepEqual(audit([open, off.lines], both), []);
 });

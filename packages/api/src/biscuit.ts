@@ -50,15 +50,66 @@ const need = (lines: string[], specs: AppSpec[], attenuating: boolean): BlockLin
   return parsed.lines;
 };
 
-/** Mints a token with a fresh key pair. The private key is dropped here: attenuating a Biscuit doesn't need it. */
-export async function mint(specs: AppSpec[], lines: string[]) {
+const KEY = /^ed25519-private\/[0-9a-f]{64}$/;
+const hex = (key: { toString(): string }) => key.toString().split("/")[1]!;
+
+/** A signing key pair, as text. In this demo the user's key lives in their browser tab. */
+export async function newKey() {
+  const b = await load();
+  const keys = new b.KeyPair(b.SignatureAlgorithm.Ed25519);
+  return { privateKey: keys.getPrivateKey().toString(), publicKey: hex(keys.getPublicKey()) };
+}
+
+async function keyPair(privateKey?: string) {
+  const b = await load();
+  if (privateKey === undefined) return new b.KeyPair(b.SignatureAlgorithm.Ed25519);
+  if (!KEY.test(privateKey)) throw new Error("That isn't a signing key.");
+  return b.KeyPair.fromPrivateKey(b.PrivateKey.fromString(privateKey));
+}
+
+/** Mints a token: compiles the sentences and signs them with the given key, or a fresh one. */
+export async function mint(specs: AppSpec[], lines: string[], privateKey?: string) {
   const b = await load();
   const block = need(lines, specs, false);
-  const keys = new b.KeyPair(b.SignatureAlgorithm.Ed25519);
+  const keys = await keyPair(privateKey);
   const builder = b.Biscuit.builder();
   builder.addCode(blockCode(block));
-  const token = builder.build(keys.getPrivateKey());
-  return { token: token.toBase64(), publicKey: keys.getPublicKey().toString().split("/")[1]! };
+  return { token: builder.build(keys.getPrivateKey()).toBase64(), publicKey: hex(keys.getPublicKey()) };
+}
+
+/**
+ * Signs Datalog exactly as written, with no sentences to compile it from: what someone editing a token by hand
+ * produces. Without the owner's key it is signed with a throwaway one, which is all a forger can do.
+ */
+export async function forge(code: string, privateKey?: string) {
+  const b = await load();
+  const keys = await keyPair(privateKey);
+  const builder = b.Biscuit.builder();
+  try {
+    builder.addCode(code);
+  } catch (e) {
+    const rest = (e as { Language?: { ParseError?: { errors?: { input?: string }[] } } }).Language?.ParseError?.errors?.[0]?.input;
+    throw new Error(`That isn't valid Datalog${rest ? `, starting at “${rest.slice(0, 40)}”` : ""}. Each statement ends with a semicolon.`);
+  }
+  return { token: builder.build(keys.getPrivateKey()).toBase64() };
+}
+
+/** Whether a token verifies under a key, and the sentences it carries if it does. */
+export async function inspect(specs: AppSpec[], token: string, publicKey: string) {
+  const b = await load();
+  let biscuit;
+  try {
+    biscuit = b.Biscuit.fromBase64(token.trim(), b.PublicKey.fromString(publicKey, b.SignatureAlgorithm.Ed25519));
+  } catch {
+    return { verifies: false as const, blocks: [] as string[][], appIds: [] as string[] };
+  }
+  const blocks: string[][] = [];
+  for (let i = 0; i < biscuit.countBlocks(); i++) {
+    blocks.push(biscuit.getBlockSource(i).split("\n").flatMap((l) => /^sentence\(\d+, "(.*)"\);$/.exec(l)?.[1] ?? []));
+  }
+  const parsed = parseBlock(blocks[0] ?? [], specs, false);
+  const appIds = parsed.ok ? [...new Set(parsed.lines.flatMap((l) => (l.line.app ? [l.line.app] : [])))] : [];
+  return { verifies: true as const, blocks, appIds };
 }
 
 /** Appends a block of restrictions, giving a new token. Anyone holding the original can do this; no key is involved. */

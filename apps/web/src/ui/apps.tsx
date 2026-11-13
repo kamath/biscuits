@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { templatesFor } from "api/grammar";
+import { audit, parseGrant, templatesFor } from "api/grammar";
 import { useSetAtom } from "jotai";
 import { modalAtom } from "../lib/state.ts";
 import { Button, Disclosure, QueryState, Tag } from "./kit.tsx";
+import { Findings } from "./pass.tsx";
 import { useWorld } from "./shared.tsx";
 import { Page } from "./tokens.tsx";
 
@@ -75,6 +76,10 @@ export function AppPage({ appId }: { appId: string }) {
     );
   }
   const own = grants.filter((g) => g.appId === app.id);
+  const flags = (lines: string[]) => {
+    const parsed = parseGrant(lines, app);
+    return parsed.ok ? audit([parsed.lines], [app]) : [];
+  };
   return (
     <Page>
       {back}
@@ -112,6 +117,7 @@ export function AppPage({ appId }: { appId: string }) {
                 </li>
               ))}
             </ul>
+            <Findings findings={flags(g.lines)} />
             <div className="flex flex-wrap gap-2">
               <Button small variant="primary" onClick={() => setModal({ kind: "mint", grantId: g.id })}>
                 Mint a token from it

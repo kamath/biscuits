@@ -1,13 +1,14 @@
 // The home screen: a conversation between an agent that tries things and the services that check its token.
+import { Menu } from "@base-ui/react/menu";
 import { Select } from "@base-ui/react/select";
 import type { AgentRequest, TraceLine } from "api";
 import { parseQualified, type AppSpec } from "api/grammar";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
-import { heldTokenAtom, modalAtom, tokensAtom, turnsAtom, type Token, type Turn } from "../lib/state.ts";
+import { heldTokenAtom, modalAtom, turnsAtom, type Token, type Turn } from "../lib/state.ts";
 import { Button, Disclosure, Mark, Modal, QueryState } from "./kit.tsx";
 import { Pass, Sentence } from "./pass.tsx";
-import { copy, CostNote, describe, EstimateNote, newId, useSend, useWorld } from "./shared.tsx";
+import { copy, CostNote, describe, EstimateNote, sound, useSend, useWorld } from "./shared.tsx";
 
 export function Playground() {
   const { q } = useWorld();
@@ -27,16 +28,18 @@ function Conversation() {
   const setHeld = useSetAtom(heldTokenAtom);
   const send = useSend();
   const [text, setText] = useState("");
-  const [showPass, setShowPass] = useState(false);
+  const [inspecting, setInspecting] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   const last = turns.at(-1);
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
+    // Follow the conversation; an empty one stays at its top, where the samples are.
+    if (turns.length) end.current?.scrollIntoView({ block: "end" });
   }, [turns.length, last?.phase]);
 
   if (!held) return null;
   const busy = send.isPending;
   const say = (words: string, request?: AgentRequest) => !busy && send.mutate({ text: words, request, token: held });
+  const trySample = (s: (typeof samples)[number]) => say(s.name, { app: s.app, action: s.action, args: s.args });
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_23rem]">
@@ -44,12 +47,29 @@ function Conversation() {
         <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-6 md:px-8">
           <div className="mx-auto flex max-w-2xl flex-col gap-6">
             {turns.length === 0 ? (
-              <div className="flex flex-col gap-3 pt-[6vh]">
-                <h1 className="text-2xl leading-tight font-semibold">What does the agent try to do?</h1>
-                <p className="max-w-[58ch] text-muted">
-                  The agent is holding the token “{held.name}”. Pick something for it to attempt, or write your own. The service it calls checks the request against the
-                  token's lines and tells you which ones let it through or stopped it.
-                </p>
+              <div className="flex flex-col gap-5 pt-[4vh]">
+                <div className="flex flex-col gap-2">
+                  <h1 className="text-2xl leading-tight font-semibold">What does the agent try to do?</h1>
+                  <p className="max-w-[58ch] text-muted">
+                    Pick something for the agent to attempt, or write your own below. The service it calls checks the request against the token the agent is holding and shows
+                    which lines let it through or stopped it.
+                  </p>
+                </div>
+                <ul className="grid gap-2 sm:grid-cols-2" aria-label="Sample actions">
+                  {samples.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => trySample(s)}
+                        className="flex min-h-14 w-full cursor-pointer flex-col items-start justify-center rounded-xl bg-paper px-3.5 py-2 text-left ring-1 ring-line hover:ring-accent disabled:cursor-default disabled:opacity-50"
+                      >
+                        <span className="font-medium">{s.name}</span>
+                        <span className="text-[0.85rem] text-muted">{apps.find((a) => a.id === s.app)?.name}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : (
               turns.map((t) => <Exchange key={t.id} turn={t} apps={apps} onRetry={() => say(t.text, t.request ?? undefined)} />)
@@ -60,25 +80,15 @@ function Conversation() {
 
         <div className="bg-paper px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ring-1 ring-line md:px-8">
           <div className="mx-auto flex max-w-2xl flex-col gap-2.5">
-            <div className="flex items-center gap-2 md:hidden">
-              <span className="text-[0.9rem] text-muted">Holding</span>
-              <TokenSelect tokens={tokens} held={held} onChange={setHeld} />
-              <Button small variant="quiet" onClick={() => setShowPass(true)}>
-                View
-              </Button>
-            </div>
-            <div className="-mx-1 flex gap-2 px-1 pb-1 max-md:overflow-x-auto md:flex-wrap" aria-label="Sample actions">
-              {samples.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => say(s.name, { app: s.app, action: s.action, args: s.args })}
-                  className="min-h-9 cursor-pointer rounded-full bg-well px-3 text-[0.9rem] whitespace-nowrap ring-1 ring-line ring-inset hover:bg-accent-soft hover:text-accent disabled:cursor-default disabled:opacity-50"
-                >
-                  {s.name}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[0.9rem] text-muted">Holding the token</span>
+              <div className="flex min-w-48 flex-1">
+                <TokenSelect tokens={tokens} held={held} onChange={setHeld} />
+              </div>
+              <NewTokenMenu />
+              <span className="md:hidden">
+                <Button onClick={() => setInspecting(true)}>Inspect</Button>
+              </span>
             </div>
             <form
               className="flex gap-2"
@@ -97,6 +107,7 @@ function Conversation() {
                 autoComplete="off"
                 className="min-h-11 min-w-0 flex-1 rounded-xl bg-well px-3.5 ring-1 ring-line ring-inset placeholder:text-muted focus:bg-paper"
               />
+              {turns.length > 0 && <SamplesMenu samples={samples} disabled={busy} onPick={trySample} />}
               <Button type="submit" variant="primary" disabled={!text.trim() || busy} className="min-h-11">
                 {busy ? "Sending…" : "Send"}
               </Button>
@@ -108,18 +119,21 @@ function Conversation() {
         </div>
       </section>
 
-      <aside className="min-h-0 overflow-auto overscroll-contain bg-page p-4 ring-1 ring-line max-md:hidden" aria-label="The token the agent is holding">
-        <InHand tokens={tokens} held={held} apps={apps} onChange={setHeld} />
+      <aside className="min-h-0 overflow-auto overscroll-contain bg-page p-4 ring-1 ring-line max-md:hidden" aria-label="Token inspector">
+        <Inspector tokens={tokens} held={held} apps={apps} />
       </aside>
 
-      {showPass && (
-        <Modal onClose={() => setShowPass(false)} title="The token in hand">
-          <InHand tokens={tokens} held={held} apps={apps} onChange={setHeld} bare />
+      {inspecting && (
+        <Modal onClose={() => setInspecting(false)} title="Token inspector">
+          <Inspector tokens={tokens} held={held} apps={apps} bare />
         </Modal>
       )}
     </div>
   );
 }
+
+const popup = "min-w-56 rounded-xl bg-paper p-1 shadow-xl ring-1 ring-line";
+const option = "flex min-h-10 cursor-pointer items-center rounded-lg px-2.5 data-highlighted:bg-accent-soft data-highlighted:text-accent";
 
 function TokenSelect({ tokens, held, onChange }: { tokens: Token[]; held: Token; onChange: (id: string) => void }) {
   return (
@@ -137,10 +151,10 @@ function TokenSelect({ tokens, held, onChange }: { tokens: Token[]; held: Token;
       </Select.Trigger>
       <Select.Portal>
         <Select.Positioner sideOffset={6} alignItemWithTrigger={false} className="z-10">
-          <Select.Popup className="max-h-[50vh] min-w-(--anchor-width) overflow-auto rounded-xl bg-paper p-1 shadow-xl ring-1 ring-line">
+          <Select.Popup className={`max-h-[50vh] min-w-(--anchor-width) overflow-auto ${popup}`}>
             <Select.List>
               {tokens.map((t) => (
-                <Select.Item key={t.id} value={t.id} className="flex min-h-10 cursor-pointer items-center justify-between gap-3 rounded-lg px-2.5 data-highlighted:bg-accent-soft data-highlighted:text-accent">
+                <Select.Item key={t.id} value={t.id} className={`${option} justify-between gap-3`}>
                   <Select.ItemText>{t.name}</Select.ItemText>
                   <Select.ItemIndicator>
                     <Mark kind="check" />
@@ -155,49 +169,76 @@ function TokenSelect({ tokens, held, onChange }: { tokens: Token[]; held: Token;
   );
 }
 
-/** The held token and what can be done with it. `bare` is the phone's dialog, which already has a title. */
-function InHand({ tokens, held, apps, onChange, bare }: { tokens: Token[]; held: Token; apps: AppSpec[]; onChange: (id: string) => void; bare?: boolean }) {
+/** The ways to put a different token in the agent's hand. */
+function NewTokenMenu() {
   const setModal = useSetAtom(modalAtom);
-  const setTokens = useSetAtom(tokensAtom);
+  return (
+    <Menu.Root>
+      <Menu.Trigger render={<Button />}>New token</Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner sideOffset={6} align="end" className="z-10">
+          <Menu.Popup className={popup}>
+            <Menu.Item className={option} onClick={() => setModal({ kind: "describeToken", hold: true })}>
+              Describe it in words
+            </Menu.Item>
+            <Menu.Item className={option} onClick={() => setModal({ kind: "mint", hold: true })}>
+              Mint it from grants
+            </Menu.Item>
+            <Menu.Item className={option} onClick={() => setModal({ kind: "editToken", hold: true })}>
+              Paste one in
+            </Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
+/** Once the conversation has started, the samples live here. */
+function SamplesMenu({ samples, disabled, onPick }: { samples: { id: string; name: string; app: string; action: string; args: Record<string, string> }[]; disabled: boolean; onPick: (s: { id: string; name: string; app: string; action: string; args: Record<string, string> }) => void }) {
+  return (
+    <Menu.Root>
+      <Menu.Trigger render={<Button className="min-h-11" />} disabled={disabled}>
+        Samples
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner sideOffset={6} align="end" className="z-10">
+          <Menu.Popup className={popup}>
+            {samples.map((s) => (
+              <Menu.Item key={s.id} className={option} onClick={() => onPick(s)}>
+                {s.name}
+              </Menu.Item>
+            ))}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
+/** The held token, laid open: its lines, any warnings about them, and what can be done to it. */
+function Inspector({ tokens, held, apps, bare }: { tokens: Token[]; held: Token; apps: AppSpec[]; bare?: boolean }) {
+  const setModal = useSetAtom(modalAtom);
   const [datalog, setDatalog] = useState(false);
-  const tampered = held.how === "tampered";
-  const tamper = () => {
-    // Flip one character in the middle, as someone editing the token by hand would. The original is kept.
-    const i = Math.floor(held.token.length / 2);
-    const changed = held.token.slice(0, i) + (held.token[i] === "A" ? "B" : "A") + held.token.slice(i + 1);
-    const id = newId();
-    setTokens((all) => [...all, { ...held, id, name: `${held.name}, tampered`.slice(0, 80), parentId: held.id, how: "tampered", token: changed, preset: false }]);
-    onChange(id);
-  };
   return (
     <div className="flex flex-col gap-3">
-      {!bare && <h2 className="font-semibold">The agent is holding</h2>}
-      <TokenSelect tokens={tokens} held={held} onChange={onChange} />
+      {!bare && <h2 className="font-semibold">Token inspector</h2>}
       <Pass token={held} specs={apps.filter((a) => held.appIds.includes(a.id))} parent={tokens.find((t) => t.id === held.parentId)} showDatalog={datalog} />
       <div className="flex flex-wrap gap-2">
-        <Button small disabled={tampered} onClick={() => setModal({ kind: "attenuate", tokenId: held.id, hold: true })}>
+        <Button small disabled={!sound(held)} onClick={() => setModal({ kind: "attenuate", tokenId: held.id, hold: true })}>
           Attenuate
         </Button>
-        <Button small disabled={tampered} onClick={tamper}>
-          Tamper with a copy
+        <Button small onClick={() => setModal({ kind: "editToken", tokenId: held.id, hold: true })}>
+          Edit by hand
         </Button>
         <Button small onClick={() => void copy(held.token, "the token")}>
           Copy
         </Button>
-        <Button small variant="quiet" onClick={() => setDatalog((d) => !d)} aria-pressed={datalog}>
-          {datalog ? "Hide the Datalog" : "Show the Datalog"}
-        </Button>
-      </div>
-      <div className="flex flex-col gap-2 border-t border-line pt-3">
-        <p className="text-[0.9rem] text-muted">Or give it a different one:</p>
-        <div className="flex flex-wrap gap-2">
-          <Button small variant="primary" onClick={() => setModal({ kind: "describeToken", hold: true })}>
-            Describe a new token
+        {!held.raw && (
+          <Button small variant="quiet" onClick={() => setDatalog((d) => !d)} aria-pressed={datalog}>
+            {datalog ? "Hide the Datalog" : "Show the Datalog"}
           </Button>
-          <Button small onClick={() => setModal({ kind: "mint", hold: true })}>
-            Mint from grants
-          </Button>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -304,7 +345,7 @@ function Ruling({ turn, apps, appName, phrase }: { turn: Turn; apps: AppSpec[]; 
         <p className={`${head} bg-bad-soft text-bad`}>
           <Mark kind="cross" /> {appName} rejected the token
         </p>
-        <p className="px-4 py-3">{verdict.reason} It never got as far as reading the lines.</p>
+        <p className="px-4 py-3">{verdict.reason}</p>
       </div>
     );
   }

@@ -2,7 +2,7 @@
 // It keeps nothing. Grants, tokens and generated apps live in the browser and travel with each call.
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { ask, estimate, MODEL, price } from "./ai.ts";
-import { attenuate, authorize, mint } from "./biscuit.ts";
+import { attenuate, authorize, forge, inspect, mint, newKey } from "./biscuit.ts";
 import * as catalog from "./catalog.ts";
 import { parseGrant, qualify, render, type AppSpec } from "./grammar.ts";
 import * as prompts from "./prompts.ts";
@@ -26,6 +26,7 @@ const Spec = z
           phrase: z.string().min(1).max(60),
           description: z.string().max(200),
           params: z.array(z.object({ name: ident, type: z.enum(["string", "number"]), example: z.string().max(60) })).max(4),
+          risky: z.boolean().openapi({ description: "Moves money, speaks as the user, or destroys something." }),
         }),
       )
       .min(1)
@@ -37,6 +38,7 @@ const Lines = z.array(z.string().max(300)).min(1).max(80).openapi("Lines", { des
 const Grant = z.object({ id: z.string(), appId: z.string(), name: z.string(), lines: z.array(z.string()) }).openapi("Grant");
 const Token = z.string().max(20000).openapi("Token", { description: "A Biscuit, URL-safe base64." });
 const PublicKey = z.string().regex(/^[0-9a-f]{64}$/).openapi("PublicKey", { description: "Ed25519 root key of the token, hex." });
+const PrivateKey = z.string().regex(/^ed25519-private\/[0-9a-f]{64}$/).openapi("PrivateKey", { description: "The user's signing key. In this demo it lives in the browser tab." });
 const Args = z.record(z.string(), z.string().max(200));
 const AgentRequest = z.object({ app: z.string().max(40), action: ident, args: Args }).openapi("AgentRequest", { description: "One thing an agent tries to do." });
 const Problem = z.object({ error: z.string() }).openapi("Problem");
@@ -68,31 +70,38 @@ const problem = (description: string) => json(Problem, description);
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const today = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-/** The preset tokens, minted once per server start so their keys stay put while the page is open. */
-let presets: Promise<z.infer<typeof PresetToken>[]> | undefined;
-const presetTokens = () =>
-  (presets ??= Promise.all(
-    catalog.tokens.map(async (t) => {
-      const grants = t.grantIds.map((id) => catalog.grants.find((g) => g.id === id)!);
-      const specs = catalog.apps.filter((a) => grants.some((g) => g.appId === a.id));
-      const lines = grants.flatMap((g) => {
-        const parsed = parseGrant(g.lines, catalog.apps.find((a) => a.id === g.appId)!);
-        return parsed.ok ? parsed.lines.map((l) => qualify(l.line, catalog.apps)) : [];
-      });
-      return { id: t.id, name: t.name, appIds: specs.map((a) => a.id), lines, ...(await mint(specs, lines)) };
-    }),
-  ));
+/**
+ * The demo user's signing key and the preset tokens signed with it, made once per server start. Handing the
+ * private key to the page is what lets it re-sign an edited token; a real user's key would never leave them.
+ */
+let demo: Promise<{ key: { privateKey: string; publicKey: string }; tokens: z.infer<typeof PresetToken>[] }> | undefined;
+const demoUser = () =>
+  (demo ??= (async () => {
+    const key = await newKey();
+    const tokens = await Promise.all(
+      catalog.tokens.map(async (t) => {
+        const grants = t.grantIds.map((id) => catalog.grants.find((g) => g.id === id)!);
+        const specs = catalog.apps.filter((a) => grants.some((g) => g.appId === a.id));
+        const lines = grants.flatMap((g) => {
+          const parsed = parseGrant(g.lines, catalog.apps.find((a) => a.id === g.appId)!);
+          return parsed.ok ? parsed.lines.map((l) => qualify(l.line, catalog.apps)) : [];
+        });
+        return { id: t.id, name: t.name, appIds: specs.map((a) => a.id), lines, ...(await mint(specs, lines, key.privateKey)) };
+      }),
+    );
+    return { key, tokens };
+  })());
 
 const listApps = createRoute({
   method: "get",
   path: "/apps",
   operationId: "listApps",
   summary: "List what ships with the demo",
-  description: "The built-in sample services, starter grants for them, a few requests to try, and preset tokens minted from the starter grants.",
+  description: "The built-in sample services, starter grants for them, a few requests to try, the demo user's signing key, and preset tokens signed with it.",
   responses: {
     200: json(
-      z.object({ apps: z.array(Spec), grants: z.array(Grant), requests: z.array(AgentRequest.extend({ id: z.string(), name: z.string() })), tokens: z.array(PresetToken) }).openapi("Catalogue"),
-      "Apps, grants, requests and tokens",
+      z.object({ apps: z.array(Spec), grants: z.array(Grant), requests: z.array(AgentRequest.extend({ id: z.string(), name: z.string() })), key: z.object({ privateKey: PrivateKey, publicKey: PublicKey }), tokens: z.array(PresetToken) }).openapi("Catalogue"),
+      "Apps, grants, requests, the signing key and tokens",
     ),
   },
 });
@@ -170,8 +179,8 @@ const mintToken = createRoute({
   operationId: "mintToken",
   summary: "Mint a token",
   description:
-    "Compiles qualified sentences, from one or more grants across one or more apps, to Datalog and signs them as a Biscuit with a fresh key pair. The private key is discarded.",
-  request: body(z.object({ specs: Specs, lines: Lines })),
+    "Compiles qualified sentences, from one or more grants across one or more apps, to Datalog and signs them as a Biscuit: with the given key, or with a fresh one that is then discarded.",
+  request: body(z.object({ specs: Specs, lines: Lines, privateKey: PrivateKey.optional() })),
   responses: { 200: json(z.object({ token: Token, publicKey: PublicKey }).openapi("MintedToken"), "The token and its root key"), 400: problem("A line matches no template") },
 });
 
@@ -183,6 +192,27 @@ const attenuateToken = createRoute({
   description: "Appends a block of restrictions to a starting token and returns the result as a new token. Needs no key: any holder can do it.",
   request: body(z.object({ specs: Specs, token: Token, publicKey: PublicKey, lines: Lines })),
   responses: { 200: json(z.object({ token: Token }).openapi("AttenuatedToken"), "The new, narrower token"), 400: problem("A line is not a restriction, or the token doesn't verify") },
+});
+
+const forgeToken = createRoute({
+  method: "post",
+  path: "/tokens/forge",
+  operationId: "forgeToken",
+  summary: "Sign hand-edited Datalog",
+  description:
+    "Builds a token from Datalog exactly as written, the way someone editing a token by hand would. With the owner's key it is a genuine re-signing; without, it is signed by a throwaway key, which is all a forger can manage, and will not verify.",
+  request: body(z.object({ code: z.string().min(1).max(20000), privateKey: PrivateKey.optional() })),
+  responses: { 200: json(z.object({ token: Token }).openapi("ForgedToken"), "The token"), 400: problem("The Datalog doesn't parse") },
+});
+
+const inspectToken = createRoute({
+  method: "post",
+  path: "/tokens/inspect",
+  operationId: "inspectToken",
+  summary: "Read a pasted token",
+  description: "Checks a token's signature against a key and, if it verifies, returns the sentences each block carries.",
+  request: body(z.object({ specs: Specs, token: Token, publicKey: PublicKey })),
+  responses: { 200: json(z.object({ verifies: z.boolean(), blocks: z.array(z.array(z.string())), appIds: z.array(z.string()) }).openapi("InspectedToken"), "Whether it verifies, and its sentences") },
 });
 
 const sendRequest = createRoute({
@@ -207,11 +237,11 @@ base.onError((e, c) => c.json({ error: message(e) }, 500));
 base.notFound((c) => c.json({ error: `No route ${c.req.method} ${c.req.path}` }, 404));
 base.doc("/openapi.json", {
   openapi: "3.0.0",
-  info: { title: "Biscuits", version: "0.3.0", description: "Sentence-level grants for agents, signed as Biscuit tokens." },
+  info: { title: "Biscuits", version: "0.4.0", description: "Sentence-level grants for agents, signed as Biscuit tokens." },
 });
 
 export const app = base
-  .openapi(listApps, async (c) => c.json({ apps: catalog.apps, grants: catalog.grants, requests: catalog.requests, tokens: await presetTokens() }, 200))
+  .openapi(listApps, async (c) => c.json({ apps: catalog.apps, grants: catalog.grants, requests: catalog.requests, ...(await demoUser()) }, 200))
   .openapi(estimates, async (c) => {
     const p = await price();
     const day = "2026-01-01";
@@ -267,9 +297,9 @@ export const app = base
     }
   })
   .openapi(mintToken, async (c) => {
-    const { specs, lines } = c.req.valid("json");
+    const { specs, lines, privateKey } = c.req.valid("json");
     try {
-      return c.json(await mint(specs, lines), 200);
+      return c.json(await mint(specs, lines, privateKey), 200);
     } catch (e) {
       return c.json({ error: message(e) }, 400);
     }
@@ -282,6 +312,18 @@ export const app = base
       // Biscuit throws plain objects for a token that doesn't parse or verify.
       return c.json({ error: e instanceof Error ? e.message : "The starting token doesn't verify, so it can't be attenuated." }, 400);
     }
+  })
+  .openapi(forgeToken, async (c) => {
+    const { code, privateKey } = c.req.valid("json");
+    try {
+      return c.json(await forge(code, privateKey), 200);
+    } catch (e) {
+      return c.json({ error: message(e) }, 400);
+    }
+  })
+  .openapi(inspectToken, async (c) => {
+    const { specs, token, publicKey } = c.req.valid("json");
+    return c.json(await inspect(specs, token, publicKey), 200);
   })
   .openapi(sendRequest, async (c) => {
     const { specs, token, publicKey, app, action, args } = c.req.valid("json");

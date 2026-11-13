@@ -15,6 +15,7 @@ export const appDraftSchema = z.object({
       id: z.string().describe("snake_case, e.g. send_payment"),
       phrase: z.string().describe('Lowercase verb phrase that completes "It may …", e.g. "send payments"'),
       description: z.string().describe("One sentence."),
+      risky: z.boolean().describe("true if the action moves money, sends or shares something as the user, or deletes or cancels something"),
       params: z.array(
         z.object({
           name: z.string().describe("snake_case, e.g. payee"),
@@ -49,7 +50,7 @@ export function toSpec(draft: AppDraft, id: string): AppSpec {
       names.add(name);
       params.push({ name, type: p.type, example: clean(p.example, 60) });
     }
-    actions.push({ id: aid, phrase, description: clean(a.description, 200), params });
+    actions.push({ id: aid, phrase, description: clean(a.description, 200), params, risky: a.risky });
   }
   if (!actions.length) throw new Error("The model returned no usable actions. Try again.");
   return {

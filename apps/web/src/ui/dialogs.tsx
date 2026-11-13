@@ -3,13 +3,15 @@ import { CheckboxGroup } from "@base-ui/react/checkbox-group";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { Cost } from "api";
-import { parse, parseBlock, parseGrant, qualify, splitLines, templatesFor, type AppSpec, type ParsedBlock } from "api/grammar";
+import { Tabs } from "@base-ui/react/tabs";
+import { audit, blockCode, parse, parseBlock, parseGrant, qualify, splitLines, templatesFor, type AppSpec, type ParsedBlock } from "api/grammar";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Fragment, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api.ts";
-import { generatedAppsAtom, grantsAtom, heldTokenAtom, modalAtom, tokensAtom, turnsAtom, type Grant, type Token, type Turn } from "../lib/state.ts";
+import { generatedAppsAtom, grantsAtom, modalAtom, tokensAtom, turnsAtom, type Grant, type Token, type Turn } from "../lib/state.ts";
 import { Button, CheckRow, Confirm, LinesField, Modal, TextField, toast } from "./kit.tsx";
-import { CostNote, describe, EstimateNote, fail, newId, recordCost, usd, useSend, useWorld } from "./shared.tsx";
+import { Findings } from "./pass.tsx";
+import { CostNote, describe, EstimateNote, fail, newId, recordCost, usd, useLand, useSend, useWorld } from "./shared.tsx";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -36,6 +38,7 @@ export function Modals() {
     const app = apps.find((a) => a.id === modal.appId);
     return app ? <GrantEditor app={app} grant={grants.find((g) => g.id === modal.grantId)} onClose={close} /> : null;
   }
+  if (modal.kind === "editToken") return <EditToken token={tokens.find((t) => t.id === modal.tokenId)} hold={modal.hold} onClose={close} />;
   if (modal.kind === "attenuate") {
     const token = tokens.find((t) => t.id === modal.tokenId);
     return token ? <Attenuate token={token} hold={modal.hold} onClose={close} /> : null;
@@ -153,16 +156,6 @@ function DraftStep({
       {cost && <CostNote cost={cost} what="That draft" />}
     </form>
   );
-}
-
-/** Where a freshly made token goes: into the agent's hand in the playground, or onto its own page. */
-function useLand(hold?: boolean) {
-  const navigate = useNavigate();
-  const setHeld = useSetAtom(heldTokenAtom);
-  return (tokenId: string) => {
-    if (hold) return void setHeld(tokenId);
-    void navigate({ to: "/tokens/$tokenId", params: { tokenId } });
-  };
 }
 
 // ---------------------------------------------------------------- an app
@@ -301,6 +294,7 @@ function GrantEditor({ app, grant, onClose }: { app: AppSpec; grant?: Grant; onC
         />
         <LineErrors text={text} parsed={parsed} />
         <LeftOut items={left} />
+        {parsed.ok && <Findings findings={audit([parsed.lines], [app])} />}
         <Footer>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={!parsed.ok || draft.isPending}>
@@ -316,7 +310,7 @@ function GrantEditor({ app, grant, onClose }: { app: AppSpec; grant?: Grant; onC
 
 function DescribeToken({ hold, onClose }: { hold?: boolean; onClose: () => void }) {
   const field = useRef<HTMLInputElement>(null);
-  const { apps } = useWorld();
+  const { apps, key } = useWorld();
   const [request, setRequest] = useState("");
   const [text, setText] = useState("");
   const [left, setLeft] = useState<string[]>([]);
@@ -339,7 +333,7 @@ function DescribeToken({ hold, onClose }: { hold?: boolean; onClose: () => void 
       // The token belongs to the apps its lines name.
       const used = new Set(parsed.ok ? parsed.lines.map((l) => l.line.app) : []);
       const specs = apps.filter((a) => used.has(a.id));
-      return api.mintToken({ specs, lines }).then((signed) => ({ signed, specs }));
+      return api.mintToken({ specs, lines, privateKey: key?.privateKey }).then((signed) => ({ signed, specs }));
     },
     onSuccess: ({ signed, specs }, lines) => {
       const id = newId();
@@ -373,6 +367,7 @@ function DescribeToken({ hold, onClose }: { hold?: boolean; onClose: () => void 
         <LinesField label="The lines to sign, one per row" hint="Write them yourself or edit the draft. Each names its app." name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder={example} />
         <LineErrors text={text} parsed={parsed} />
         <LeftOut items={left} />
+        {parsed.ok && <Findings findings={audit([parsed.lines], apps)} />}
         <Footer>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={!parsed.ok || draft.isPending || mint.isPending}>
@@ -386,7 +381,7 @@ function DescribeToken({ hold, onClose }: { hold?: boolean; onClose: () => void 
 
 function Mint({ preselect, hold, onClose }: { preselect?: string; hold?: boolean; onClose: () => void }) {
   const field = useRef<HTMLInputElement>(null);
-  const { apps, grants } = useWorld();
+  const { apps, grants, key } = useWorld();
   const [picked, setPicked] = useState<string[]>(preselect ? [preselect] : []);
   const [name, setName] = useState("");
   const setTokens = useSetAtom(tokensAtom);
@@ -405,8 +400,9 @@ function Mint({ preselect, hold, onClose }: { preselect?: string; hold?: boolean
     ),
   ];
   const fallback = chosen.map((g) => g.name).join(" + ");
+  const combined = parseBlock(lines, apps, false);
   const mint = useMutation({
-    mutationFn: () => api.mintToken({ specs, lines }),
+    mutationFn: () => api.mintToken({ specs, lines, privateKey: key?.privateKey }),
     onSuccess: (signed) => {
       const id = newId();
       setTokens((all) => [...all, { id, name: (name.trim() || fallback).slice(0, 80), parentId: null, how: null, appIds: specs.map((a) => a.id), blocks: [lines], ...signed }]);
@@ -441,6 +437,7 @@ function Mint({ preselect, hold, onClose }: { preselect?: string; hold?: boolean
               </Fragment>
             ))}
         </CheckboxGroup>
+        <Findings findings={combined.ok ? audit([combined.lines], apps) : []} />
         <Footer>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={!lines.length || mint.isPending}>
@@ -513,6 +510,142 @@ function Attenuate({ token, hold, onClose }: { token: Token; hold?: boolean; onC
           </Button>
         </Footer>
       </form>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------- editing a token by hand
+
+const tabClass = "min-h-10 cursor-pointer border-b-2 border-transparent px-3 font-medium text-muted hover:text-ink data-active:border-accent data-active:text-ink";
+
+/**
+ * Hand-editing, the way someone tampering would: change the Datalog, or the token's raw text. What comes out
+ * is always a new token; whether a service accepts it depends on who signed it and whether it still says what
+ * its sentences say. Without a starting token, this is a place to paste one in.
+ */
+function EditToken({ token, hold, onClose }: { token?: Token; hold?: boolean; onClose: () => void }) {
+  const { apps, key } = useWorld();
+  const setTokens = useSetAtom(tokensAtom);
+  const land = useLand(hold);
+  const specs = token ? apps.filter((a) => token.appIds.includes(a.id)) : apps;
+  const first = token && !token.raw ? parseBlock(token.blocks[0] ?? [], specs, false) : null;
+  const [code, setCode] = useState(token?.raw ?? (first?.ok ? blockCode(first.lines) : ""));
+  const [raw, setRaw] = useState(token?.token ?? "");
+  const add = (made: Token) => {
+    setTokens((all) => [...all, made]);
+    onClose();
+    land(made.id);
+  };
+  const base = { parentId: token?.id ?? null, appIds: token?.appIds ?? [], publicKey: key?.publicKey ?? "", preset: false };
+
+  const forge = useMutation({
+    mutationFn: (resign: boolean) => api.forgeToken({ code, privateKey: resign ? key?.privateKey : undefined }).then((made) => ({ made, resign })),
+    onSuccess: ({ made, resign }) =>
+      add({ ...base, id: newId(), name: `${token!.name}, edited${resign ? " and re-signed" : ""}`.slice(0, 80), how: "edited", raw: code, resigned: resign, blocks: [[]], token: made.token }),
+    onError: fail,
+  });
+  const paste = useMutation({
+    mutationFn: () => api.inspectToken({ specs: apps, token: raw.trim(), publicKey: key?.publicKey ?? "" }),
+    onSuccess: (read) =>
+      add({
+        ...base,
+        id: newId(),
+        name: token ? `${token.name}, raw text edited`.slice(0, 80) : "Pasted token",
+        how: "pasted",
+        verifies: read.verifies,
+        blocks: read.blocks,
+        appIds: read.verifies ? read.appIds : base.appIds,
+        token: raw.trim(),
+      }),
+    onError: fail,
+  });
+  const busy = forge.isPending || paste.isPending;
+
+  const rawForm = (
+    <form
+      className="flex flex-col gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (raw.trim() && !busy) paste.mutate();
+      }}
+    >
+      <LinesField
+        code
+        wrap="soft"
+        className="break-all"
+        label="The token's text"
+        hint="This is the whole signed token. Change any character and its signature stops matching."
+        name="raw"
+        value={raw}
+        onChange={(e) => setRaw(e.currentTarget.value)}
+        placeholder="Paste a token here"
+      />
+      <Footer>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button type="submit" variant="primary" disabled={!raw.trim() || busy}>
+          {paste.isPending ? "Checking…" : "Use this token"}
+        </Button>
+      </Footer>
+    </form>
+  );
+
+  if (!token) {
+    return (
+      <Modal onClose={onClose} title="Paste a token" description="It is checked against your key. If it doesn't verify, you can still hand it to the agent and watch it be refused." wide>
+        {rawForm}
+      </Modal>
+    );
+  }
+  return (
+    <Modal
+      onClose={onClose}
+      title="Edit this token by hand"
+      description={`This is what tampering looks like. You get a new token; “${token.name}” is left as it was.${token.blocks.length > 1 ? " Its attenuations aren't carried over." : ""}`}
+      wide
+    >
+      <Tabs.Root defaultValue="datalog" className="flex flex-col gap-3">
+        <Tabs.List className="flex border-b border-line">
+          <Tabs.Tab value="datalog" className={tabClass}>
+            Its Datalog
+          </Tabs.Tab>
+          <Tabs.Tab value="raw" className={tabClass}>
+            Its raw text
+          </Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="datalog">
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (code.trim() && !busy) forge.mutate(true);
+            }}
+          >
+            <LinesField
+              code
+              rows={10}
+              label="What the token says"
+              hint="Each sentence is followed by the Datalog it compiled to. Try raising a limit, or adding a right with no sentence."
+              name="code"
+              value={code}
+              onChange={(e) => setCode(e.currentTarget.value)}
+            />
+            <p className="text-[0.9rem] text-muted">
+              Saved without re-signing, it carries a signature that isn't yours, as a forger's would. Re-signed, the signature is yours again, but a service still compares each
+              sentence with its Datalog.
+            </p>
+            <Footer>
+              <Button onClick={onClose}>Cancel</Button>
+              <Button disabled={!code.trim() || busy} onClick={() => forge.mutate(false)}>
+                Save without re-signing
+              </Button>
+              <Button type="submit" variant="primary" disabled={!code.trim() || busy}>
+                Re-sign with your key
+              </Button>
+            </Footer>
+          </form>
+        </Tabs.Panel>
+        <Tabs.Panel value="raw">{rawForm}</Tabs.Panel>
+      </Tabs.Root>
     </Modal>
   );
 }
