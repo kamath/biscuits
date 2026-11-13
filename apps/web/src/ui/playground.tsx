@@ -1,6 +1,5 @@
 // The home screen: a conversation between an agent that tries things and the services that check its token.
 import { Menu } from "@base-ui/react/menu";
-import { Select } from "@base-ui/react/select";
 import type { AgentRequest, TraceLine } from "api";
 import { parseQualified, type AppSpec } from "api/grammar";
 import { useAtomValue, useSetAtom } from "jotai";
@@ -22,37 +21,65 @@ export function Playground() {
   );
 }
 
+/** What the agent is about to try, waiting for a token to try it with. */
+type Pending = { text: string; request?: AgentRequest };
+
 function Conversation() {
   const { apps, tokens, held, samples } = useWorld();
   const turns = useAtomValue(turnsAtom);
   const setHeld = useSetAtom(heldTokenAtom);
   const send = useSend();
   const [text, setText] = useState("");
+  const [pending, setPending] = useState<Pending | null>(null);
+  // While choosing, the inspector shows whichever token the pointer or focus is on.
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const end = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
   const last = turns.at(-1);
   useEffect(() => {
     // Follow the conversation; an empty one stays at its top, where the samples are.
-    if (turns.length) end.current?.scrollIntoView({ block: "end" });
-  }, [turns.length, last?.phase]);
+    if (turns.length || pending) end.current?.scrollIntoView({ block: "end" });
+  }, [turns.length, last?.phase, pending]);
 
   if (!held) return null;
   const busy = send.isPending;
-  const say = (words: string, request?: AgentRequest) => !busy && send.mutate({ text: words, request, token: held });
-  const trySample = (s: (typeof samples)[number]) => say(s.name, { app: s.app, action: s.action, args: s.args });
+  const shown = (pending && tokens.find((t) => t.id === previewId)) || held;
+  /** Step one: what the agent tries. Nothing is sent until a token is chosen. */
+  const propose = (p: Pending) => {
+    if (busy) return;
+    setPending(p);
+    setPreviewId(null);
+  };
+  /** Step two: the token it tries it with. */
+  const choose = (token: Token) => {
+    if (!pending || busy) return;
+    setHeld(token.id);
+    send.mutate({ ...pending, token });
+    setPending(null);
+    setPreviewId(null);
+  };
+  const back = () => {
+    if (pending && !pending.request) setText(pending.text);
+    setPending(null);
+    setPreviewId(null);
+    requestAnimationFrame(() => input.current?.focus());
+  };
+  const retry = (t: Turn) => !busy && send.mutate({ text: t.text, request: t.request ?? undefined, token: tokens.find((k) => k.id === t.tokenId) ?? held });
+  const trySample = (s: (typeof samples)[number]) => propose({ text: s.name, request: { app: s.app, action: s.action, args: s.args } });
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_22rem] lg:grid-cols-[minmax(0,1fr)_27rem]">
       <section className="flex min-h-0 min-w-0 flex-col" aria-label="Conversation">
         <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-6 md:px-8">
           <div className="flex max-w-3xl flex-col gap-6">
-            {turns.length === 0 ? (
+            {turns.length === 0 && !pending ? (
               <div className="flex flex-col gap-5 pt-[4vh]">
                 <div className="flex flex-col gap-2">
                   <h1 className="text-2xl leading-tight font-semibold">What does the agent try to do?</h1>
                   <p className="max-w-[58ch] text-muted">
-                    Pick something for the agent to attempt, or write your own below. The service it calls checks the request against the token the agent is holding and shows
-                    which lines let it through or stopped it.
+                    Pick something for the agent to attempt, or write your own below. Then choose the token the agent holds while it tries. The service it calls checks the
+                    request against that token and shows which lines let it through or stopped it.
                   </p>
                 </div>
                 <ul className="grid gap-2 sm:grid-cols-2" aria-label="Sample actions">
@@ -72,102 +99,144 @@ function Conversation() {
                 </ul>
               </div>
             ) : (
-              turns.map((t) => <Exchange key={t.id} turn={t} apps={apps} onRetry={() => say(t.text, t.request ?? undefined)} />)
+              turns.map((t) => <Exchange key={t.id} turn={t} apps={apps} onRetry={() => retry(t)} />)
+            )}
+            {pending && (
+              <div className="flex max-w-[85%] flex-col items-end gap-1.5 self-end">
+                <p className="rounded-2xl rounded-br-md bg-accent px-4 py-2.5 text-on-accent opacity-70">{pending.text}</p>
+                <p className="text-[0.85rem] text-muted">Waiting for a token</p>
+              </div>
             )}
             <div ref={end} />
           </div>
         </div>
 
         <div className="bg-paper px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ring-1 ring-line md:px-8">
-          <div className="flex max-w-3xl flex-col gap-2.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[0.9rem] text-muted">Holding the token</span>
-              <div className="flex min-w-48 flex-1">
-                <TokenSelect tokens={tokens} held={held} onChange={setHeld} />
-              </div>
-              <NewTokenMenu />
-              <span className="md:hidden">
-                <Button onClick={() => setInspecting(true)}>Inspect</Button>
-              </span>
+          {pending ? (
+            <TokenChooser
+              tokens={tokens}
+              apps={apps}
+              lastId={held.id}
+              onPreview={setPreviewId}
+              onChoose={choose}
+              onBack={back}
+              onInspect={() => setInspecting(true)}
+            />
+          ) : (
+            <div className="flex max-w-3xl flex-col gap-2.5">
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!text.trim() || busy) return;
+                  propose({ text: text.trim() });
+                  setText("");
+                }}
+              >
+                <input
+                  ref={input}
+                  aria-label="What the agent tries to do"
+                  value={text}
+                  onChange={(e) => setText(e.currentTarget.value)}
+                  placeholder="The agent tries to… send 300 to my roommate"
+                  autoComplete="off"
+                  className="min-h-11 min-w-0 flex-1 rounded-xl bg-well px-3.5 ring-1 ring-line ring-inset placeholder:text-muted focus:bg-paper"
+                />
+                {turns.length > 0 && <SamplesMenu samples={samples} disabled={busy} onPick={trySample} />}
+                <Button type="submit" variant="primary" disabled={!text.trim() || busy} className="min-h-11">
+                  {busy ? "Sending…" : "Next"}
+                </Button>
+              </form>
+              <p className="text-[0.85rem] text-muted">
+                Next you choose the token the agent holds. Samples are free. Your own words go through the model first:{" "}
+                <EstimateNote kind="draftRequest" phrase={(cost) => `about ${cost} each.`} />
+              </p>
             </div>
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!text.trim() || busy) return;
-                say(text.trim());
-                setText("");
-              }}
-            >
-              <input
-                aria-label="What the agent tries to do"
-                value={text}
-                onChange={(e) => setText(e.currentTarget.value)}
-                placeholder="The agent tries to… send 300 to my roommate"
-                autoComplete="off"
-                className="min-h-11 min-w-0 flex-1 rounded-xl bg-well px-3.5 ring-1 ring-line ring-inset placeholder:text-muted focus:bg-paper"
-              />
-              {turns.length > 0 && <SamplesMenu samples={samples} disabled={busy} onPick={trySample} />}
-              <Button type="submit" variant="primary" disabled={!text.trim() || busy} className="min-h-11">
-                {busy ? "Sending…" : "Send"}
-              </Button>
-            </form>
-            <p className="text-[0.85rem] text-muted">
-              Samples are free. Your own words go through the model first: <EstimateNote kind="draftRequest" phrase={(cost) => `about ${cost} each.`} />
-            </p>
-          </div>
+          )}
         </div>
       </section>
 
       <aside className="flex min-h-0 flex-col border-l border-line bg-page max-md:hidden" aria-label="Token inspector">
-        <Inspector tokens={tokens} held={held} apps={apps} />
+        <Inspector tokens={tokens} held={shown} apps={apps} />
       </aside>
 
       {inspecting && (
         <Modal onClose={() => setInspecting(false)} title="Token inspector">
-          <Inspector tokens={tokens} held={held} apps={apps} bare />
+          <Inspector tokens={tokens} held={shown} apps={apps} bare />
         </Modal>
       )}
     </div>
   );
 }
 
-const popup = "min-w-56 rounded-xl bg-paper p-1 shadow-xl ring-1 ring-line";
-const option = "flex min-h-10 cursor-pointer items-center rounded-lg px-2.5 data-highlighted:bg-accent-soft data-highlighted:text-accent";
-
-function TokenSelect({ tokens, held, onChange }: { tokens: Token[]; held: Token; onChange: (id: string) => void }) {
+/** Step two of a turn: the agent's attempt is written, now it needs a token in hand. */
+function TokenChooser({
+  tokens,
+  apps,
+  lastId,
+  onPreview,
+  onChoose,
+  onBack,
+  onInspect,
+}: {
+  tokens: Token[];
+  apps: AppSpec[];
+  lastId: string;
+  onPreview: (id: string | null) => void;
+  onChoose: (t: Token) => void;
+  onBack: () => void;
+  onInspect: () => void;
+}) {
+  const first = useRef<HTMLButtonElement>(null);
+  useEffect(() => first.current?.focus(), []);
+  const ordered = [...tokens.filter((t) => t.id === lastId), ...tokens.filter((t) => t.id !== lastId)];
   return (
-    <Select.Root items={tokens.map((t) => ({ label: t.name, value: t.id }))} value={held.id} onValueChange={(id) => id && onChange(id)}>
-      <Select.Trigger
-        aria-label="Token the agent is holding"
-        className="flex min-h-10 min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-lg bg-paper px-3 text-left font-medium ring-1 ring-line ring-inset hover:bg-well"
-      >
-        <Select.Value className="truncate" />
-        <Select.Icon className="text-muted">
-          <svg viewBox="0 0 12 12" className="size-3" aria-hidden>
-            <path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </Select.Icon>
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Positioner sideOffset={6} alignItemWithTrigger={false} className="z-10">
-          <Select.Popup className={`max-h-[50vh] min-w-(--anchor-width) overflow-auto ${popup}`}>
-            <Select.List>
-              {tokens.map((t) => (
-                <Select.Item key={t.id} value={t.id} className={`${option} justify-between gap-3`}>
-                  <Select.ItemText>{t.name}</Select.ItemText>
-                  <Select.ItemIndicator>
-                    <Mark kind="check" />
-                  </Select.ItemIndicator>
-                </Select.Item>
-              ))}
-            </Select.List>
-          </Select.Popup>
-        </Select.Positioner>
-      </Select.Portal>
-    </Select.Root>
+    <div
+      className="flex max-w-3xl flex-col gap-2.5"
+      role="group"
+      aria-label="Choose a token"
+      // Only Escape from the chooser itself: menus and dialogs opened from it handle their own.
+      onKeyDown={(e) => e.key === "Escape" && e.currentTarget.contains(e.target as Node) && onBack()}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="flex-1 font-medium">Which token does the agent hold?</p>
+        <NewTokenMenu />
+        <span className="md:hidden">
+          <Button onClick={onInspect}>Inspect</Button>
+        </span>
+        <Button variant="quiet" onClick={onBack}>
+          Back
+        </Button>
+      </div>
+      <ul className="grid max-h-[40vh] gap-2 overflow-auto overscroll-contain p-0.5 sm:grid-cols-2" aria-label="Tokens" onPointerLeave={() => onPreview(null)}>
+        {ordered.map((t, i) => (
+          <li key={t.id}>
+            <button
+              ref={i === 0 ? first : undefined}
+              type="button"
+              onClick={() => onChoose(t)}
+              onPointerEnter={() => onPreview(t.id)}
+              onFocus={() => onPreview(t.id)}
+              className="flex min-h-14 w-full cursor-pointer flex-col items-start justify-center rounded-xl bg-paper px-3.5 py-2 text-left ring-1 ring-line hover:ring-accent focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <span className="flex w-full items-center justify-between gap-2">
+                <span className="truncate font-medium">{t.name}</span>
+                {t.id === lastId && <span className="shrink-0 text-[0.8rem] text-muted">in hand</span>}
+              </span>
+              <span className="truncate text-[0.85rem] text-muted">
+                {t.appIds.map((id) => apps.find((a) => a.id === id)?.name ?? id).join(", ") || "No apps"}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[0.85rem] text-muted">Choosing a token sends the request. Esc or Back to change what the agent tries.</p>
+    </div>
   );
 }
+
+const popup = "min-w-56 rounded-xl bg-paper p-1 shadow-xl ring-1 ring-line";
+const option = "flex min-h-10 cursor-pointer items-center rounded-lg px-2.5 data-highlighted:bg-accent-soft data-highlighted:text-accent";
 
 /** The ways to put a different token in the agent's hand. */
 function NewTokenMenu() {
