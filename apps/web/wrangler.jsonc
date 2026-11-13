@@ -1,5 +1,6 @@
-// The Worker. In the Cloudflare dashboard the project's root directory is apps/web, so Workers Builds runs
-// `pnpm run build` and `npx wrangler deploy` here; wrangler then finds the config the build generated.
+// The Worker. `vite build` generates the config wrangler actually deploys (dist/server/wrangler.json) from
+// this file, and leaves a redirect to it both here and in the repository root, so `wrangler deploy` and
+// `wrangler preview` work from either directory.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "biscuits",
