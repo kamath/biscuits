@@ -25,6 +25,7 @@ export function Playground() {
 function Conversation() {
   const { apps, tokens, held, samples } = useWorld();
   const turns = useAtomValue(turnsAtom);
+  const setTurns = useSetAtom(turnsAtom);
   const setHeld = useSetAtom(heldTokenAtom);
   const send = useSend();
   const [text, setText] = useState("");
@@ -86,6 +87,11 @@ function Conversation() {
                 <TokenSelect tokens={tokens} held={held} onChange={setHeld} />
               </div>
               <NewTokenMenu />
+              {turns.length > 0 && (
+                <Button disabled={busy} onClick={() => setTurns([])} title="Clear this conversation. Your tokens, grants and apps stay.">
+                  New chat
+                </Button>
+              )}
               <span className="md:hidden">
                 <Button onClick={() => setInspecting(true)}>Inspect</Button>
               </span>
