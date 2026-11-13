@@ -9,6 +9,9 @@
   // The server bundle uses AsyncLocalStorage from node:async_hooks.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  // Lets `wrangler preview` publish non-production branches as preview Workers. Nothing to configure yet.
-  "previews": {}
+  // Lets `wrangler preview` publish non-production branches as preview Workers, each reachable at
+  // https://<branch-derived-name>-biscuits.<account>.workers.dev once the production Worker has been
+  // deployed with preview_urls on (it is a Worker-level setting, so a preview deploy alone can't turn it on).
+  "previews": {},
+  "preview_urls": true
 }
