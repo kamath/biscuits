@@ -47,7 +47,9 @@ export function TokensPage() {
                     {apps
                       .filter((a) => t.appIds.includes(a.id))
                       .map((a) => (
-                        <Tag key={a.id}>{a.name}</Tag>
+                        <Tag key={a.id} accent>
+                          {a.name}
+                        </Tag>
                       ))}
                   </span>
                   <span className="text-[0.9rem] text-muted">

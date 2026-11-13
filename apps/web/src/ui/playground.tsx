@@ -7,7 +7,7 @@ import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useRef, useState } from "react";
 import { heldTokenAtom, modalAtom, turnsAtom, type Token, type Turn } from "../lib/state.ts";
 import { Button, Disclosure, Mark, Modal, QueryState } from "./kit.tsx";
-import { Pass, Sentence } from "./pass.tsx";
+import { PassBody, PassHeading, Sentence } from "./pass.tsx";
 import { copy, CostNote, describe, EstimateNote, sound, useSend, useWorld } from "./shared.tsx";
 
 export function Playground() {
@@ -42,10 +42,10 @@ function Conversation() {
   const trySample = (s: (typeof samples)[number]) => say(s.name, { app: s.app, action: s.action, args: s.args });
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_23rem]">
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_22rem] lg:grid-cols-[minmax(0,1fr)_27rem]">
       <section className="flex min-h-0 min-w-0 flex-col" aria-label="Conversation">
         <div className="min-h-0 flex-1 overflow-auto overscroll-contain px-4 py-6 md:px-8">
-          <div className="mx-auto flex max-w-2xl flex-col gap-6">
+          <div className="flex max-w-3xl flex-col gap-6">
             {turns.length === 0 ? (
               <div className="flex flex-col gap-5 pt-[4vh]">
                 <div className="flex flex-col gap-2">
@@ -79,7 +79,7 @@ function Conversation() {
         </div>
 
         <div className="bg-paper px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ring-1 ring-line md:px-8">
-          <div className="mx-auto flex max-w-2xl flex-col gap-2.5">
+          <div className="flex max-w-3xl flex-col gap-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[0.9rem] text-muted">Holding the token</span>
               <div className="flex min-w-48 flex-1">
@@ -119,7 +119,7 @@ function Conversation() {
         </div>
       </section>
 
-      <aside className="min-h-0 overflow-auto overscroll-contain bg-page p-4 ring-1 ring-line max-md:hidden" aria-label="Token inspector">
+      <aside className="flex min-h-0 flex-col border-l border-line bg-page max-md:hidden" aria-label="Token inspector">
         <Inspector tokens={tokens} held={held} apps={apps} />
       </aside>
 
@@ -216,29 +216,41 @@ function SamplesMenu({ samples, disabled, onPick }: { samples: { id: string; nam
   );
 }
 
-/** The held token, laid open: its lines, any warnings about them, and what can be done to it. */
+/** The held token, laid open: what can be done to it first, then its lines app by app. */
 function Inspector({ tokens, held, apps, bare }: { tokens: Token[]; held: Token; apps: AppSpec[]; bare?: boolean }) {
   const setModal = useSetAtom(modalAtom);
   const [datalog, setDatalog] = useState(false);
+  const toggle = !held.raw && (
+    <Button small variant="quiet" onClick={() => setDatalog((d) => !d)} aria-pressed={datalog}>
+      {datalog ? "Hide Datalog" : "Show Datalog"}
+    </Button>
+  );
   return (
-    <div className="flex flex-col gap-3">
-      {!bare && <h2 className="font-semibold">Token inspector</h2>}
-      <Pass token={held} specs={apps.filter((a) => held.appIds.includes(a.id))} parent={tokens.find((t) => t.id === held.parentId)} showDatalog={datalog} />
-      <div className="flex flex-wrap gap-2">
-        <Button small disabled={!sound(held)} onClick={() => setModal({ kind: "attenuate", tokenId: held.id, hold: true })}>
-          Attenuate
-        </Button>
-        <Button small onClick={() => setModal({ kind: "editToken", tokenId: held.id, hold: true })}>
-          Edit by hand
-        </Button>
-        <Button small onClick={() => void copy(held.token, "the token")}>
-          Copy
-        </Button>
-        {!held.raw && (
-          <Button small variant="quiet" onClick={() => setDatalog((d) => !d)} aria-pressed={datalog}>
-            {datalog ? "Hide the Datalog" : "Show the Datalog"}
-          </Button>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className={`flex flex-col gap-3 pb-4 ${bare ? "" : "px-4 pt-5 lg:px-8"}`}>
+        {!bare && (
+          <div className="flex min-h-8 items-center justify-between gap-2">
+            <p className="text-[0.85rem] font-medium text-muted">Token inspector</p>
+            {toggle}
+          </div>
         )}
+        <PassHeading token={held} parent={tokens.find((t) => t.id === held.parentId)} as="h2" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button small variant="primary" disabled={!sound(held)} onClick={() => setModal({ kind: "attenuate", tokenId: held.id, hold: true })}>
+            Attenuate
+          </Button>
+          <Button small onClick={() => setModal({ kind: "editToken", tokenId: held.id, hold: true })}>
+            Edit by hand
+          </Button>
+          <Button small onClick={() => void copy(held.token, "the token")}>
+            Copy
+          </Button>
+          {bare && toggle}
+        </div>
+        <p className="text-[0.85rem] text-muted">Attenuating makes a narrower copy to hand on. It can add limits to this token, never lift one.</p>
+      </div>
+      <div className={bare ? "" : "min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-6 lg:px-8"}>
+        <PassBody token={held} specs={apps.filter((a) => held.appIds.includes(a.id))} showDatalog={datalog} />
       </div>
     </div>
   );

@@ -164,7 +164,10 @@ export function Mark({ kind }: { kind: "check" | "cross" | "dash" }) {
   );
 }
 
-export const Tag = ({ children }: { children: ReactNode }) => <span className="rounded-full bg-well px-2 py-0.5 text-[0.8rem] whitespace-nowrap text-muted">{children}</span>;
+/** A small label. The accent one names an app, wherever a token's apps are shown. */
+export const Tag = ({ children, accent }: { children: ReactNode; accent?: boolean }) => (
+  <span className={`rounded-full px-2 py-0.5 whitespace-nowrap ${accent ? "bg-accent-soft text-[0.85rem] font-semibold text-accent" : "bg-well text-[0.8rem] text-muted"}`}>{children}</span>
+);
 
 // A manager outside React, so mutation callbacks can raise a toast.
 const manager = Toast.createToastManager();
