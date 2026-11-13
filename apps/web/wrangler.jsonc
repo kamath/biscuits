@@ -1,6 +1,6 @@
 // The Worker. `vite build` generates the config wrangler actually deploys (dist/server/wrangler.json) from
-// this file and leaves a redirect to it here, so run `wrangler deploy` and `wrangler preview` from apps/web
-// (Workers Builds does, with the project's root directory set to apps/web).
+// this file, and leaves a redirect to it both here and in the repository root, so `wrangler deploy` and
+// `wrangler preview` work from either directory.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "biscuits",
