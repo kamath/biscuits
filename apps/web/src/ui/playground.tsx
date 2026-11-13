@@ -42,7 +42,6 @@ function Conversation() {
     if (turns.length || pending) end.current?.scrollIntoView({ block: "end" });
   }, [turns.length, last?.phase, pending]);
 
-  if (!held) return null;
   const busy = send.isPending;
   const shown = (pending && tokens.find((t) => t.id === previewId)) || held;
   /** Step one: what the agent tries. Nothing is sent until a token is chosen. */
@@ -65,7 +64,13 @@ function Conversation() {
     setPreviewId(null);
     requestAnimationFrame(() => input.current?.focus());
   };
-  const retry = (t: Turn) => !busy && send.mutate({ text: t.text, request: t.request ?? undefined, token: tokens.find((k) => k.id === t.tokenId) ?? held });
+  const retry = (t: Turn) => {
+    if (busy) return;
+    const token = tokens.find((k) => k.id === t.tokenId);
+    // If that token is gone, ask for one again rather than guessing.
+    if (token) send.mutate({ text: t.text, request: t.request ?? undefined, token });
+    else propose({ text: t.text, request: t.request ?? undefined });
+  };
   const trySample = (s: (typeof samples)[number]) => propose({ text: s.name, request: { app: s.app, action: s.action, args: s.args } });
 
   return (
@@ -116,7 +121,6 @@ function Conversation() {
             <TokenChooser
               tokens={tokens}
               apps={apps}
-              lastId={held.id}
               onPreview={setPreviewId}
               onChoose={choose}
               onBack={back}
@@ -173,7 +177,6 @@ function Conversation() {
 function TokenChooser({
   tokens,
   apps,
-  lastId,
   onPreview,
   onChoose,
   onBack,
@@ -181,18 +184,19 @@ function TokenChooser({
 }: {
   tokens: Token[];
   apps: AppSpec[];
-  lastId: string;
   onPreview: (id: string | null) => void;
   onChoose: (t: Token) => void;
   onBack: () => void;
   onInspect: () => void;
 }) {
-  const first = useRef<HTMLButtonElement>(null);
-  useEffect(() => first.current?.focus(), []);
-  const ordered = [...tokens.filter((t) => t.id === lastId), ...tokens.filter((t) => t.id !== lastId)];
+  // Focus lands on the chooser itself, not a token, so nothing is picked or previewed for the user.
+  const self = useRef<HTMLDivElement>(null);
+  useEffect(() => self.current?.focus(), []);
   return (
     <div
-      className="flex max-w-3xl flex-col gap-2.5"
+      ref={self}
+      tabIndex={-1}
+      className="flex max-w-3xl flex-col gap-2.5 outline-none"
       role="group"
       aria-label="Choose a token"
       // Only Escape from the chooser itself: menus and dialogs opened from it handle their own.
@@ -200,7 +204,6 @@ function TokenChooser({
     >
       <div className="flex flex-wrap items-center gap-2">
         <p className="flex-1 font-medium">Which token does the agent hold?</p>
-        <NewTokenMenu />
         <span className="md:hidden">
           <Button onClick={onInspect}>Inspect</Button>
         </span>
@@ -209,26 +212,25 @@ function TokenChooser({
         </Button>
       </div>
       <ul className="grid max-h-[40vh] gap-2 overflow-auto overscroll-contain p-0.5 sm:grid-cols-2" aria-label="Tokens" onPointerLeave={() => onPreview(null)}>
-        {ordered.map((t, i) => (
+        {tokens.map((t) => (
           <li key={t.id}>
             <button
-              ref={i === 0 ? first : undefined}
               type="button"
               onClick={() => onChoose(t)}
               onPointerEnter={() => onPreview(t.id)}
               onFocus={() => onPreview(t.id)}
               className="flex min-h-14 w-full cursor-pointer flex-col items-start justify-center rounded-xl bg-paper px-3.5 py-2 text-left ring-1 ring-line hover:ring-accent focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <span className="flex w-full items-center justify-between gap-2">
-                <span className="truncate font-medium">{t.name}</span>
-                {t.id === lastId && <span className="shrink-0 text-[0.8rem] text-muted">in hand</span>}
-              </span>
+              <span className="w-full truncate font-medium">{t.name}</span>
               <span className="truncate text-[0.85rem] text-muted">
                 {t.appIds.map((id) => apps.find((a) => a.id === id)?.name ?? id).join(", ") || "No apps"}
               </span>
             </button>
           </li>
         ))}
+        <li>
+          <NewTokenMenu className="flex min-h-14 w-full cursor-pointer flex-col items-start justify-center rounded-xl border border-dashed border-muted px-3.5 py-2 text-left text-muted hover:border-accent hover:text-accent focus-visible:border-accent focus-visible:text-accent data-popup-open:border-accent data-popup-open:text-accent" />
+        </li>
       </ul>
       <p className="text-[0.85rem] text-muted">Choosing a token sends the request. Esc or Back to change what the agent tries.</p>
     </div>
@@ -239,13 +241,16 @@ const popup = "min-w-56 rounded-xl bg-paper p-1 shadow-xl ring-1 ring-line";
 const option = "flex min-h-10 cursor-pointer items-center rounded-lg px-2.5 data-highlighted:bg-accent-soft data-highlighted:text-accent";
 
 /** The ways to put a different token in the agent's hand. */
-function NewTokenMenu() {
+function NewTokenMenu({ className }: { className: string }) {
   const setModal = useSetAtom(modalAtom);
   return (
     <Menu.Root>
-      <Menu.Trigger render={<Button />}>New token</Menu.Trigger>
+      <Menu.Trigger className={className}>
+        <span className="font-medium">New token</span>
+        <span className="text-[0.85rem]">Describe, mint or paste one</span>
+      </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner sideOffset={6} align="end" className="z-10">
+        <Menu.Positioner sideOffset={6} align="start" className="z-10">
           <Menu.Popup className={popup}>
             <Menu.Item className={option} onClick={() => setModal({ kind: "describeToken", hold: true })}>
               Describe it in words
@@ -286,9 +291,17 @@ function SamplesMenu({ samples, disabled, onPick }: { samples: { id: string; nam
 }
 
 /** The held token, laid open: what can be done to it first, then its lines app by app. */
-function Inspector({ tokens, held, apps, bare }: { tokens: Token[]; held: Token; apps: AppSpec[]; bare?: boolean }) {
+function Inspector({ tokens, held, apps, bare }: { tokens: Token[]; held?: Token; apps: AppSpec[]; bare?: boolean }) {
   const setModal = useSetAtom(modalAtom);
   const [datalog, setDatalog] = useState(false);
+  if (!held) {
+    return (
+      <div className={`flex flex-col gap-2 ${bare ? "" : "px-4 pt-5 lg:px-8"}`}>
+        {!bare && <p className="text-[0.85rem] font-medium text-muted">Token inspector</p>}
+        <p className="text-muted">No token chosen yet. Write what the agent tries, then point at a token to see its lines here.</p>
+      </div>
+    );
+  }
   const toggle = !held.raw && (
     <Button small variant="quiet" onClick={() => setDatalog((d) => !d)} aria-pressed={datalog}>
       {datalog ? "Hide Datalog" : "Show Datalog"}

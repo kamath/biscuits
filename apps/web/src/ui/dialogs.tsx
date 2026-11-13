@@ -209,10 +209,11 @@ function EditTurn({ turn, onClose }: { turn: Turn; onClose: () => void }) {
   const { apps, tokens, held } = useWorld();
   const send = useSend();
   const { app, action } = turn.request ? describe(turn.request, apps) : { app: undefined, action: undefined };
-  if (!turn.request || !app || !action || !held) return null;
+  if (!turn.request || !app || !action) return null;
   const request = turn.request;
   // Sent again with the token the original turn used, if it still exists.
   const token = tokens.find((t) => t.id === turn.tokenId) ?? held;
+  if (!token) return null;
   return (
     <Modal onClose={onClose} title="Change the values and send again" description={`${app.name}, ${action.phrase}. Sent with “${token.name}”.`} initialFocus={first}>
       <form
