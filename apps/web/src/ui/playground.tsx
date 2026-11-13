@@ -31,8 +31,8 @@ function Conversation() {
   const send = useSend();
   const [text, setText] = useState("");
   const [pending, setPending] = useState<Pending | null>(null);
-  // While choosing, the inspector shows whichever token the pointer or focus is on.
-  const [previewId, setPreviewId] = useState<string | null>(null);
+  // The token picked in the chooser. It stays in the inspector until another is picked.
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState(false);
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -43,14 +43,17 @@ function Conversation() {
   }, [turns.length, last?.phase, pending]);
 
   const busy = send.isPending;
-  const shown = (pending && tokens.find((t) => t.id === previewId)) || held;
+  // A press picks a token and keeps it in the inspector to be read; sending is its own step. With nothing
+  // picked yet, the token the agent last held stands in, so trying again with it is one press.
+  const picked = tokens.find((t) => t.id === pickedId) ?? held;
+  const shown = picked;
   // Reserved for the whole of choosing, so pointing at a token never reflows the cards under the pointer.
   const inspectable = !!pending || !!held;
   /** Step one: what the agent tries. Nothing is sent until a token is chosen. */
   const propose = (p: Pending) => {
     if (busy) return;
     setPending(p);
-    setPreviewId(null);
+    setPickedId(null);
   };
   /** Step two: the token it tries it with. */
   const choose = (token: Token) => {
@@ -58,12 +61,12 @@ function Conversation() {
     setHeld(token.id);
     send.mutate({ ...pending, token });
     setPending(null);
-    setPreviewId(null);
+    setPickedId(null);
   };
   const back = () => {
     if (pending && !pending.request) setText(pending.text);
     setPending(null);
-    setPreviewId(null);
+    setPickedId(null);
     requestAnimationFrame(() => input.current?.focus());
   };
   const retry = (t: Turn) => {
@@ -126,7 +129,8 @@ function Conversation() {
             <TokenChooser
               tokens={tokens}
               apps={apps}
-              onPreview={setPreviewId}
+              picked={picked}
+              onPick={setPickedId}
               onChoose={choose}
               onBack={back}
               onInspect={() => setInspecting(true)}
@@ -182,19 +186,21 @@ function Conversation() {
 function TokenChooser({
   tokens,
   apps,
-  onPreview,
+  picked,
+  onPick,
   onChoose,
   onBack,
   onInspect,
 }: {
   tokens: Token[];
   apps: AppSpec[];
-  onPreview: (id: string | null) => void;
+  picked?: Token;
+  onPick: (id: string) => void;
   onChoose: (t: Token) => void;
   onBack: () => void;
   onInspect: () => void;
 }) {
-  // Focus lands on the chooser itself, not a token, so nothing is picked or previewed for the user.
+  // Focus lands on the chooser itself, so Escape works at once and no token is picked by the focus alone.
   const self = useRef<HTMLDivElement>(null);
   useEffect(() => self.current?.focus(), []);
   return (
@@ -211,22 +217,28 @@ function TokenChooser({
         <p className="flex-1 font-medium">
           Which <Term k="token">token</Term> does the agent hold?
         </p>
-        <span className="md:hidden">
-          <Button onClick={onInspect}>Inspect</Button>
-        </span>
         <Button variant="quiet" onClick={onBack}>
           Back
         </Button>
+        {picked && (
+          <span className="md:hidden">
+            <Button onClick={onInspect}>Inspect</Button>
+          </span>
+        )}
+        <Button variant="primary" disabled={!picked} onClick={() => picked && onChoose(picked)}>
+          {picked ? `Send with “${picked.name}”` : "Pick a token"}
+        </Button>
       </div>
-      <ul className="grid max-h-[40vh] gap-2 overflow-auto overscroll-contain p-0.5 sm:grid-cols-2" aria-label="Tokens" onPointerLeave={() => onPreview(null)}>
+      <ul className="grid max-h-[40vh] gap-2 overflow-auto overscroll-contain p-0.5 sm:grid-cols-2" aria-label="Tokens">
         {tokens.map((t) => (
           <li key={t.id}>
             <button
               type="button"
-              onClick={() => onChoose(t)}
-              onPointerEnter={() => onPreview(t.id)}
-              onFocus={() => onPreview(t.id)}
-              className="flex min-h-14 w-full cursor-pointer flex-col items-start justify-center rounded-xl bg-paper px-3.5 py-2 text-left ring-1 ring-line hover:ring-accent focus-visible:ring-2 focus-visible:ring-accent"
+              aria-pressed={picked?.id === t.id}
+              onClick={() => onPick(t.id)}
+              // A double press is "this one, send it" for anyone who doesn't need to read it first.
+              onDoubleClick={() => onChoose(t)}
+              className="flex min-h-14 w-full cursor-pointer flex-col items-start justify-center rounded-xl bg-paper px-3.5 py-2 text-left ring-1 ring-line hover:ring-accent focus-visible:ring-2 focus-visible:ring-accent aria-pressed:bg-accent-soft aria-pressed:ring-2 aria-pressed:ring-accent"
             >
               <span className="w-full truncate font-medium">{t.name}</span>
               <span className="truncate text-[0.85rem] text-muted">
@@ -300,7 +312,7 @@ function SamplesMenu({ samples, disabled, onPick }: { samples: { id: string; nam
 function Inspector({ tokens, held, apps, bare }: { tokens: Token[]; held?: Token; apps: AppSpec[]; bare?: boolean }) {
   const setModal = useSetAtom(modalAtom);
   const [datalog, setDatalog] = useState(false);
-  if (!held) return <p className={`text-muted ${bare ? "" : "px-4 pt-5 lg:px-8"}`}>Point at a token to see inside it.</p>;
+  if (!held) return <p className={`text-muted ${bare ? "" : "px-4 pt-5 lg:px-8"}`}>Pick a token to see inside it.</p>;
   return (
     <div className={bare ? "flex flex-col" : "min-h-0 flex-1 overflow-auto overscroll-y-none"}>
       <div className={`flex flex-col gap-3 pb-4 ${bare ? "" : "px-4 pt-5 lg:px-8"}`}>
