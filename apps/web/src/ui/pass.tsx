@@ -31,13 +31,35 @@ export const Flag = ({ finding }: { finding: Finding }) => (
 );
 
 /** The findings for lines that are not on a pass: a grant, or a draft about to be signed. */
-export function Findings({ findings }: { findings: Finding[] }) {
+export function Findings({ findings, fix }: { findings: Finding[]; fix?: { spell: (line: Line) => string; add: (text: string) => void } }) {
   if (!findings.length) return null;
   return (
     <ul className="flex flex-col gap-1.5" aria-label="Permissions that may be too broad">
       {findings.map((f, i) => (
-        <li key={i} className="rounded-lg bg-warn-soft px-2.5 py-1.5 text-[0.9rem] text-warn">
-          <span className="font-semibold">{LEVEL[f.level]}</span> “{f.sentence}”: {f.message}
+        <li key={i} className="flex flex-col gap-1.5 rounded-lg bg-warn-soft px-2.5 py-1.5 text-[0.9rem] text-warn">
+          <p>
+            <span className="font-semibold">{LEVEL[f.level]}</span> “{f.sentence}”: {f.message}
+          </p>
+          {/* Each button writes the missing line with an example value, which is the part left to edit. */}
+          {fix && f.fixes.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Limits to add">
+              <span>Add a limit, then set its value:</span>
+              {f.fixes.map((line) => {
+                const text = fix.spell(line);
+                return (
+                  <button
+                    key={text}
+                    type="button"
+                    title={text}
+                    onClick={() => fix.add(text)}
+                    className="min-h-8 cursor-pointer rounded-lg bg-paper px-2 py-0.5 font-medium text-ink ring-1 ring-line ring-inset hover:bg-accent-soft hover:text-accent"
+                  >
+                    + {line.kind === "where" ? line.param : text}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </li>
       ))}
     </ul>

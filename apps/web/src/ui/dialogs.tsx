@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { AgentRequest, Cost } from "api";
 import { Tabs } from "@base-ui/react/tabs";
-import { audit, blockCode, parseBlock, parseGrant, parseQualified, qualify, splitLines, type AppSpec, type ParsedBlock } from "api/grammar";
+import { audit, blockCode, parseBlock, parseGrant, parseQualified, qualify, render, splitLines, type AppSpec, type ParsedBlock } from "api/grammar";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Fragment, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api.ts";
@@ -113,8 +113,18 @@ function LineErrors({ text, parsed }: { text: string; parsed: ParsedBlock }) {
   );
 }
 
+/** What the draft dropped from the request, and what a line is able to say instead. */
 const LeftOut = ({ items }: { items: string[] }) =>
-  items.length > 0 && <p className="rounded-lg bg-warn-soft px-3 py-2 text-warn">Left out, because no line can say it: {items.join("; ")}.</p>;
+  items.length > 0 && (
+    <div className="flex flex-col gap-1 rounded-lg bg-warn-soft px-3 py-2 text-[0.9rem] text-warn" role="status">
+      <p>
+        <span className="font-semibold">Not in these lines:</span> {items.map((s) => s.replace(/\.$/, "")).join("; ")}.
+      </p>
+      <p>A line can only allow an action, limit one of its values, or set an end date. Name the value you mean and draft again, or add a line yourself.</p>
+    </div>
+  );
+
+const appendLine = (text: string, line: string) => (splitLines(text).includes(line) ? text : text.trim() ? `${text.trimEnd()}\n${line}` : line);
 
 const Footer = ({ children }: { children: ReactNode }) => <div className="flex flex-wrap items-center justify-end gap-2 pt-1">{children}</div>;
 
@@ -296,7 +306,7 @@ function GrantEditor({ app, grant, onClose }: { app: AppSpec; grant?: Grant; onC
         />
         <LineErrors text={text} parsed={parsed} />
         <LeftOut items={left} />
-        {parsed.ok && <Findings findings={audit([parsed.lines], [app])} />}
+        {parsed.ok && <Findings findings={audit([parsed.lines], [app])} fix={{ spell: (l) => render(l, app), add: (line) => setText((t) => appendLine(t, line)) }} />}
         <Footer>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={!parsed.ok || draft.isPending}>
@@ -369,7 +379,7 @@ function DescribeToken({ hold, onClose }: { hold?: boolean; onClose: () => void 
         <LinesField label="The lines to sign, one per row" name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder={example} />
         <LineErrors text={text} parsed={parsed} />
         <LeftOut items={left} />
-        {parsed.ok && <Findings findings={audit([parsed.lines], apps)} />}
+        {parsed.ok && <Findings findings={audit([parsed.lines], apps)} fix={{ spell: (l) => qualify(l, apps), add: (line) => setText((t) => appendLine(t, line)) }} />}
         <Footer>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={!parsed.ok || draft.isPending || mint.isPending}>
