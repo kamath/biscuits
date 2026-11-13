@@ -77,7 +77,7 @@ function Conversation() {
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_22rem] lg:grid-cols-[minmax(0,1fr)_27rem]">
       <section className="flex min-h-0 min-w-0 flex-col" aria-label="Conversation">
         <div className="min-h-0 flex-1 overflow-auto overscroll-y-none px-4 py-6 md:px-8">
-          <div className="flex max-w-3xl flex-col gap-6">
+          <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
             {turns.length === 0 && !pending ? (
               <div className="flex flex-col gap-5 pt-[4vh]">
                 <div className="flex flex-col gap-2">
@@ -127,7 +127,7 @@ function Conversation() {
               onInspect={() => setInspecting(true)}
             />
           ) : (
-            <div className="flex max-w-3xl flex-col gap-2.5">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-2.5">
               <form
                 className="flex gap-2"
                 onSubmit={(e) => {
@@ -196,7 +196,7 @@ function TokenChooser({
     <div
       ref={self}
       tabIndex={-1}
-      className="flex max-w-3xl flex-col gap-2.5 outline-none"
+      className="mx-auto flex w-full max-w-4xl flex-col gap-2.5 outline-none"
       role="group"
       aria-label="Choose a token"
       // Only Escape from the chooser itself: menus and dialogs opened from it handle their own.
