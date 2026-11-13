@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter web dev",
-    "build": "pnpm --filter web build",
+    "build": "pnpm --filter web build && node scripts/point-wrangler-at-web.mjs",
     "test": "pnpm --filter api test",
     "typecheck": "pnpm -r typecheck",
-    "deploy": "pnpm --filter web deploy"
+    "deploy": "pnpm --filter web run deploy"
   }
 }
