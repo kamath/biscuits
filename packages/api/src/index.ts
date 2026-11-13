@@ -1,6 +1,12 @@
 // The API: a Hono app whose routes, validation and OpenAPI document all come from the same Zod schemas.
 // It keeps nothing. Grants, tokens and generated apps live in the browser and travel with each call.
+//
+// The app assumes no runtime and no mount point: it reads its one secret from whatever environment the host
+// provides, and a consumer mounts it wherever it likes, e.g. `new Hono().route("/api", app)`. The Biscuit
+// WebAssembly must be handed to init() first; "api/node" does that for Node.
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { env } from "hono/adapter";
+import type { Context } from "hono";
 import { ask, estimate, MODEL, price } from "./ai.ts";
 import { attenuate, authorize, forge, inspect, mint, newKey } from "./biscuit.ts";
 import * as catalog from "./catalog.ts";
@@ -231,26 +237,30 @@ const base = new OpenAPIHono({
   defaultHook: (result, c) => {
     if (!result.success) return c.json({ error: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") }, 400);
   },
-}).basePath("/api");
+});
+
+/** The gateway key, from the host's environment: bindings on Cloudflare, process.env on Node, Bun and Deno. */
+const key = (c: Context) => env<{ AI_GATEWAY_API_KEY?: string }>(c).AI_GATEWAY_API_KEY;
 
 base.onError((e, c) => c.json({ error: message(e) }, 500));
-base.notFound((c) => c.json({ error: `No route ${c.req.method} ${c.req.path}` }, 404));
-base.doc("/openapi.json", {
+base.doc("/openapi.json", (c) => ({
   openapi: "3.0.0",
   info: { title: "Biscuits", version: "0.4.0", description: "Sentence-level grants for agents, signed as Biscuit tokens." },
-});
+  // Paths below are relative to wherever the consumer mounted the app, which is where this document is served from.
+  servers: [{ url: c.req.path.replace(/\/openapi\.json$/, "") || "/" }],
+}));
 
 export const app = base
   .openapi(listApps, async (c) => c.json({ apps: catalog.apps, grants: catalog.grants, requests: catalog.requests, ...(await demoUser()) }, 200))
   .openapi(estimates, async (c) => {
-    const p = await price();
+    const p = await price(key(c));
     const day = "2026-01-01";
     const bank = catalog.apps[0]!;
     const [app, grant, token, request] = await Promise.all([
-      estimate(prompts.generateApp("ride sharing"), appDraftSchema, 450),
-      estimate(prompts.draftLines([bank], "let it pay my rent this month, up to 2000", day), grantDraftSchema, 220),
-      estimate(prompts.draftLines(catalog.apps, "let it pay my rent and read mail from my team", day), grantDraftSchema, 320),
-      estimate(prompts.draftRequest(catalog.apps, "pay the landlord 1500"), requestDraftSchema, 60),
+      estimate(key(c), prompts.generateApp("ride sharing"), appDraftSchema, 450),
+      estimate(key(c), prompts.draftLines([bank], "let it pay my rent this month, up to 2000", day), grantDraftSchema, 220),
+      estimate(key(c), prompts.draftLines(catalog.apps, "let it pay my rent and read mail from my team", day), grantDraftSchema, 320),
+      estimate(key(c), prompts.draftRequest(catalog.apps, "pay the landlord 1500"), requestDraftSchema, 60),
     ]);
     return c.json(
       { model: MODEL, price: { inputPerMillion: p.input * 1e6, outputPerMillion: p.output * 1e6, source: p.source }, actions: { generateApp: app, draftGrant: grant, draftToken: token, draftRequest: request } },
@@ -260,7 +270,7 @@ export const app = base
   .openapi(generateApp, async (c) => {
     const { prompt } = c.req.valid("json");
     try {
-      const { output, cost } = await ask(appDraftSchema, prompts.generateApp(prompt));
+      const { output, cost } = await ask(key(c), appDraftSchema, prompts.generateApp(prompt));
       return c.json({ app: toSpec(output, crypto.randomUUID().slice(0, 8)), cost }, 200);
     } catch (e) {
       return c.json({ error: message(e) }, 502);
@@ -270,7 +280,7 @@ export const app = base
     const data = c.req.valid("json");
     const spec: AppSpec = data.spec;
     try {
-      const { output, cost } = await ask(grantDraftSchema, prompts.draftLines([spec], data.request, data.today));
+      const { output, cost } = await ask(key(c), grantDraftSchema, prompts.draftLines([spec], data.request, data.today));
       const { lines, dropped } = toLines(output, [spec]);
       return c.json({ lines: lines.map((l) => render(l, spec)), unsupported: [...output.unsupported.map((u) => u.slice(0, 120)).slice(0, 8), ...dropped], cost }, 200);
     } catch (e) {
@@ -280,7 +290,7 @@ export const app = base
   .openapi(draftToken, async (c) => {
     const { specs, request, today } = c.req.valid("json");
     try {
-      const { output, cost } = await ask(grantDraftSchema, prompts.draftLines(specs, request, today));
+      const { output, cost } = await ask(key(c), grantDraftSchema, prompts.draftLines(specs, request, today));
       const { lines, dropped } = toLines(output, specs);
       return c.json({ lines: lines.map((l) => qualify(l, specs)), unsupported: [...output.unsupported.map((u) => u.slice(0, 120)).slice(0, 8), ...dropped], cost }, 200);
     } catch (e) {
@@ -290,7 +300,7 @@ export const app = base
   .openapi(draftRequest, async (c) => {
     const { specs, request } = c.req.valid("json");
     try {
-      const { output, cost } = await ask(requestDraftSchema, prompts.draftRequest(specs, request));
+      const { output, cost } = await ask(key(c), requestDraftSchema, prompts.draftRequest(specs, request));
       return c.json({ ...toRequest(output, specs), cost }, 200);
     } catch (e) {
       return c.json({ error: message(e) }, 502);
@@ -332,6 +342,10 @@ export const app = base
     } catch (e) {
       return c.json({ error: message(e) }, 400);
     }
-  });
+  })
+  // A route rather than notFound(), so the JSON 404 survives being mounted into another app.
+  .all("/*", (c) => c.json({ error: `No route ${c.req.method} ${c.req.path}` }, 404));
 
 export type AppType = typeof app;
+
+export { init, type WasmSource } from "./biscuit.ts";

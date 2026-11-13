@@ -1,13 +1,14 @@
+import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vite";
 
-export default defineConfig(({ mode }) => {
-  // The API reads AI_GATEWAY_API_KEY from process.env; the .env file sits at the workspace root.
-  Object.assign(process.env, loadEnv(mode, new URL("../..", import.meta.url).pathname, ""));
-  return {
-    server: { port: 3000 },
-    plugins: [tailwindcss(), tanstackStart(), viteReact()],
-  };
+// This app deploys to Cloudflare Workers; wrangler.jsonc describes the Worker. The Cloudflare plugin runs
+// the server side of the app in workerd during `vite dev` and `vite preview`, so what runs locally is
+// what deploys. The API's secret, AI_GATEWAY_API_KEY, is a Worker secret in production and a line in
+// apps/web/.dev.vars locally.
+export default defineConfig({
+  server: { port: 3000 },
+  plugins: [tailwindcss(), cloudflare({ viteEnvironment: { name: "ssr" } }), tanstackStart(), viteReact()],
 });

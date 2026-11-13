@@ -6,6 +6,7 @@
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "test": "pnpm --filter api test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "deploy": "pnpm --filter web deploy"
   }
 }

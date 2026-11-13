@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "./node.ts";
 import { attenuate, authorize as run, forge, inspect, mint, newKey, type Verdict } from "./biscuit.ts";
 import { apps, grants } from "./catalog.ts";
 import { audit, blockCode, parse, parseBlock, parseGrant, parseQualified, qualify, type AppSpec } from "./grammar.ts";
