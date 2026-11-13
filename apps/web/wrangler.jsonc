@@ -5,5 +5,7 @@
   "compatibility_date": "2026-11-01",
   // The server bundle uses AsyncLocalStorage from node:async_hooks.
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Lets `wrangler preview` publish non-production branches as preview Workers. Nothing to configure yet.
+  "previews": {}
 }
