@@ -44,7 +44,7 @@ function Conversation() {
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_22rem] lg:grid-cols-[minmax(0,1fr)_27rem]">
       <section className="flex min-h-0 min-w-0 flex-col" aria-label="Conversation">
-        <div className="min-h-0 flex-1 overflow-auto overscroll-none px-4 py-6 md:px-8">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-y-none px-4 py-6 md:px-8">
           <div className="flex max-w-3xl flex-col gap-6">
             {turns.length === 0 ? (
               <div className="flex flex-col gap-5 pt-[4vh]">
@@ -226,7 +226,7 @@ function Inspector({ tokens, held, apps, bare }: { tokens: Token[]; held: Token;
     </Button>
   );
   return (
-    <div className={bare ? "flex flex-col" : "min-h-0 flex-1 overflow-auto overscroll-none"}>
+    <div className={bare ? "flex flex-col" : "min-h-0 flex-1 overflow-auto overscroll-y-none"}>
       <div className={`flex flex-col gap-3 pb-4 ${bare ? "" : "px-4 pt-5 lg:px-8"}`}>
         {!bare && (
           <div className="flex min-h-8 items-center justify-between gap-2">

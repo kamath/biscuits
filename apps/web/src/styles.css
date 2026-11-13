@@ -82,10 +82,10 @@
   #root {
     height: 100%;
   }
-  /* No rubber-band bounce: the page itself never scrolls, and panes stop dead at their ends. */
+  /* No vertical rubber-band bounce. Only the y axis, so horizontal swipes still go back and forward. */
   html,
   body {
-    overscroll-behavior: none;
+    overscroll-behavior-y: none;
   }
   body {
     background: var(--page);
