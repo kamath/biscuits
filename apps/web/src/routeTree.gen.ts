@@ -10,19 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as BoardRouteImport } from './routes/board'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as AppsIndexRouteImport } from './routes/apps.index'
 import { Route as AppsAppIdRouteImport } from './routes/apps.$appId'
+import { Route as TokensIndexRouteImport } from './routes/tokens.index'
+import { Route as TokensTokenIdRouteImport } from './routes/tokens.$tokenId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BoardRoute = BoardRouteImport.update({
-  id: '/board',
-  path: '/board',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
@@ -40,43 +36,65 @@ const AppsAppIdRoute = AppsAppIdRouteImport.update({
   path: '/apps/$appId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TokensIndexRoute = TokensIndexRouteImport.update({
+  id: '/tokens/',
+  path: '/tokens/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TokensTokenIdRoute = TokensTokenIdRouteImport.update({
+  id: '/tokens/$tokenId',
+  path: '/tokens/$tokenId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/board': typeof BoardRoute
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRoute
+  '/tokens/$tokenId': typeof TokensTokenIdRoute
   '/apps/': typeof AppsIndexRoute
+  '/tokens/': typeof TokensIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/board': typeof BoardRoute
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRoute
+  '/tokens/$tokenId': typeof TokensTokenIdRoute
   '/apps': typeof AppsIndexRoute
+  '/tokens': typeof TokensIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/board': typeof BoardRoute
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRoute
+  '/tokens/$tokenId': typeof TokensTokenIdRoute
   '/apps/': typeof AppsIndexRoute
+  '/tokens/': typeof TokensIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/board' | '/api/$' | '/apps/$appId' | '/apps/'
+  fullPaths:
+    '/' | '/api/$' | '/apps/$appId' | '/tokens/$tokenId' | '/apps/' | '/tokens/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/board' | '/api/$' | '/apps/$appId' | '/apps'
-  id: '__root__' | '/' | '/board' | '/api/$' | '/apps/$appId' | '/apps/'
+  to: '/' | '/api/$' | '/apps/$appId' | '/tokens/$tokenId' | '/apps' | '/tokens'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/$'
+    | '/apps/$appId'
+    | '/tokens/$tokenId'
+    | '/apps/'
+    | '/tokens/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  BoardRoute: typeof BoardRoute
   ApiSplatRoute: typeof ApiSplatRoute
   AppsAppIdRoute: typeof AppsAppIdRoute
+  TokensTokenIdRoute: typeof TokensTokenIdRoute
   AppsIndexRoute: typeof AppsIndexRoute
+  TokensIndexRoute: typeof TokensIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -86,13 +104,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/board': {
-      id: '/board'
-      path: '/board'
-      fullPath: '/board'
-      preLoaderRoute: typeof BoardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/$': {
@@ -116,15 +127,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppsAppIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tokens/': {
+      id: '/tokens/'
+      path: '/tokens'
+      fullPath: '/tokens/'
+      preLoaderRoute: typeof TokensIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tokens/$tokenId': {
+      id: '/tokens/$tokenId'
+      path: '/tokens/$tokenId'
+      fullPath: '/tokens/$tokenId'
+      preLoaderRoute: typeof TokensTokenIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  BoardRoute: BoardRoute,
   ApiSplatRoute: ApiSplatRoute,
   AppsAppIdRoute: AppsAppIdRoute,
+  TokensTokenIdRoute: TokensTokenIdRoute,
   AppsIndexRoute: AppsIndexRoute,
+  TokensIndexRoute: TokensIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

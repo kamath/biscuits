@@ -173,31 +173,7 @@ test("the preset requests and tokens refer to real apps, actions and grants", as
     assert.ok(action, r.id);
     for (const name of Object.keys(r.args)) assert.ok(action.params.some((p) => p.name === name), `${r.id}.${name}`);
   }
-  for (const t of tokens) if ("from" in t) assert.ok(tokens.some((p) => p.id === t.from), `${t.id}: ${t.from}`);
-});
-
-test("the preset token is too broad for the errand, and narrowing it by hand fixes that without a key", async () => {
-  const { app } = await import("./index.ts");
-  const { requests } = await import("./catalog.ts");
-  const res = await app.request("/apps");
-  const { tokens } = (await res.json()) as { tokens: { id: string; token: string; publicKey: string }[] };
-  const broad = tokens.find((x) => x.id === "assistant")!;
-  const ask = async (token: string, requestId: string) => {
-    const r = requests.find((x) => x.id === requestId)!;
-    return (await run(apps, token, broad.publicKey, r.app, r.action, r.args)).verdict;
-  };
-  const leaks = async (token: string) => {
-    const out: string[] = [];
-    for (const r of requests) if ((await ask(token, r.id)) === "allowed" && !r.wanted) out.push(r.id);
-    return out;
-  };
-  // What the workbench opens on: the wanted errand works, and so do four things nobody asked for.
-  assert.equal(await ask(broad.token, "pay-landlord"), "allowed");
-  assert.deepEqual(await leaks(broad.token), ["pay-stranger", "read-team", "mail-outside", "book-meeting"]);
-  // The two controls a first visitor reaches for. No private key is passed anywhere here.
-  const narrowed = await attenuate(apps, broad.token, broad.publicKey, ["Only on Harbor Bank", 'On Harbor Bank, only send payments where payee is "landlord"']);
-  assert.equal(await ask(narrowed.token, "pay-landlord"), "allowed");
-  assert.deepEqual(await leaks(narrowed.token), []);
+  for (const t of tokens) for (const id of t.grantIds) assert.ok(grants.some((g) => g.id === id), `${t.id}: ${id}`);
 });
 
 test("hand-edited Datalog is caught twice over: by the signature, then by its own sentences", async () => {

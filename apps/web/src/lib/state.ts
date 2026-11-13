@@ -1,5 +1,5 @@
 import { atom } from "jotai";
-import type { Cost } from "api";
+import type { AgentRequest, Cost, Verdict } from "api";
 import type { AppSpec } from "api/grammar";
 
 /** A reusable, unsigned set of lines for one app. Starter grants come from the API and can't be changed. */
@@ -22,21 +22,23 @@ export type Token = {
   blocks: string[][];
   token: string;
   publicKey: string;
-  /** Came with the demo; can't be deleted. */
+  /** Minted by the API from the starter grants; can't be deleted. */
   preset?: boolean;
 };
 
-/** One thing an agent tries: a column of the board. */
-export type Attempt = {
+/** One exchange in the playground: what the agent tried, with which token, and what the service answered. */
+export type Turn = {
   id: string;
-  name: string;
-  app: string;
-  action: string;
-  args: Record<string, string>;
-  /** Whether the user means the agent to be able to do this. A token that lets through what isn't wanted is too broad. */
-  wanted: boolean;
-  preset?: boolean;
-  /** What the model call cost, when the words had to be worked out into a request. */
+  text: string;
+  tokenId: string;
+  tokenName: string;
+  /** What the words were resolved to. Absent while the model is still working it out, or if nothing matched. */
+  request: AgentRequest | null;
+  phase: "resolving" | "checking" | "done" | "unmatched" | "failed";
+  /** Why nothing matched, or what went wrong. */
+  note?: string;
+  verdict?: Verdict;
+  /** What the model call cost, when the words had to be worked out. */
   cost?: Cost;
 };
 
@@ -45,36 +47,26 @@ export type Attempt = {
 export const generatedAppsAtom = atom<AppSpec[]>([]);
 export const grantsAtom = atom<Grant[]>([]);
 export const tokensAtom = atom<Token[]>([]);
-export const attemptsAtom = atom<Attempt[]>([]);
-/** The user's own say on whether an attempt is wanted, over the catalogue's, by attempt id. */
-export const wantedAtom = atom<Record<string, boolean>>({});
-/**
- * Limits being tried on the workbench before they are handed on: one sentence per control, for one token.
- * They are forgotten when another token is put on the bench.
- */
-export const draftAtom = atom<{ tokenId: string; lines: Record<string, string> }>({ tokenId: "", lines: {} });
-export const attemptCursorAtom = atom<string | null>(null);
-/** Where the board's cursor rests while no pane is open. A null token is the header row; a null attempt, the token itself. */
-export const cursorAtom = atom<{ t: string | null; r: string | null } | null>(null);
-/** Whether each line shows the Datalog it stands for, everywhere at once. */
-export const datalogAtom = atom(false);
-export const appCursorAtom = atom<string | null>(null);
-export const grantCursorAtom = atom<string | null>(null);
+export const turnsAtom = atom<Turn[]>([]);
+/** The token the agent last held in the playground. Null until one is chosen: there is no default. */
+export const heldTokenAtom = atom<string | null>(null);
 /** What the model calls made from this tab have cost so far. */
 export const spendAtom = atom({ usd: 0, calls: 0 });
 
 export type ModalState =
   | null
-  | { kind: "newToken"; tab?: "describe" | "grants" | "paste"; grantId?: string }
-  /** `attemptId` is the attempt in view, so the limits on offer are about it. */
-  | { kind: "attenuate"; tokenId: string; attemptId?: string }
-  | { kind: "tamper"; tokenId: string; attemptId?: string }
-  /** `tokenId` is the token in view, which the changed attempt is then shown against. */
-  | { kind: "editAttempt"; attemptId: string; tokenId?: string }
   | { kind: "newApp" }
   | { kind: "grant"; appId: string; grantId?: string }
+  /** Describe a token for the model to draft. `hold` puts the result in the agent's hand. */
+  | { kind: "describeToken"; hold?: boolean }
+  | { kind: "mint"; grantId?: string; hold?: boolean }
+  /** `retryTurnId` names a request the agent already made: it is sent again with the token that results. */
+  | { kind: "attenuate"; tokenId: string; hold?: boolean; retryTurnId?: string }
+  /** Edit a token's Datalog or raw text by hand. Without a token, paste one in. */
+  | { kind: "editToken"; tokenId?: string; hold?: boolean; retryTurnId?: string }
+  /** Change the values of a request the agent already made, and send it again. */
+  | { kind: "editTurn"; turnId: string }
   | { kind: "deleteApp"; appId: string }
   | { kind: "deleteGrant"; grantId: string }
-  | { kind: "deleteToken"; tokenId: string }
-  | { kind: "deleteAttempt"; attemptId: string };
+  | { kind: "deleteToken"; tokenId: string };
 export const modalAtom = atom<ModalState>(null);

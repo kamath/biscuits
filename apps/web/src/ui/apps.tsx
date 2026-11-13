@@ -1,142 +1,162 @@
-// The services an agent can act on. The list opens an app; the app shows its actions, which are the vocabulary
-// token lines are written in, and its grants: reusable sets of lines, not yet signed.
-import { useNavigate } from "@tanstack/react-router";
-import { audit, parseGrant, type AppSpec } from "api/grammar";
+import { Link } from "@tanstack/react-router";
+import { audit, parseGrant, templatesFor } from "api/grammar";
 import { useSetAtom } from "jotai";
-import { appCursorAtom, grantCursorAtom, modalAtom, type Grant } from "../lib/state.ts";
-import { ActionButton, useAction, useBack, useListNav } from "./keys.tsx";
-import { Query } from "./kit.tsx";
+import { modalAtom } from "../lib/state.ts";
+import { Button, Disclosure, QueryState, Tag, Term } from "./kit.tsx";
+import { Findings } from "./pass.tsx";
 import { useWorld } from "./shared.tsx";
-import { buttons, chip, item, pane, state } from "./tw.ts";
+import { Page } from "./tokens.tsx";
 
-export function Apps({ appId }: { appId?: string }) {
-  const { q } = useWorld();
+export function AppsPage() {
+  const { q, apps, generated, grants } = useWorld();
+  const setModal = useSetAtom(modalAtom);
   return (
-    <Query q={q} what="the apps">
-      {() => <Panes appId={appId} />}
-    </Query>
+    <Page>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Apps</h1>
+        <Button variant="primary" disabled={!q.data} onClick={() => setModal({ kind: "newApp" })}>
+          Generate an app
+        </Button>
+      </header>
+      <QueryState q={q} what="the built-in apps">
+        {() => (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {apps.map((a) => {
+              const n = grants.filter((g) => g.appId === a.id).length;
+              return (
+                <li key={a.id}>
+                  <Link to="/apps/$appId" params={{ appId: a.id }} className="flex h-full flex-col gap-2 rounded-2xl bg-paper p-4 ring-1 ring-line hover:ring-accent">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-lg leading-tight font-semibold">{a.name}</span>
+                      <Tag>{generated.includes(a) ? `${a.kind}, generated` : a.kind}</Tag>
+                    </span>
+                    <span className="text-muted">{a.description}</span>
+                    <span className="text-[0.9rem] text-muted">
+                      {a.actions.length} actions, {n} {n === 1 ? "grant" : "grants"}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </QueryState>
+    </Page>
   );
 }
 
-function Panes({ appId }: { appId?: string }) {
-  const { apps, generated } = useWorld();
-  const navigate = useNavigate();
+export function AppPage({ appId }: { appId: string }) {
+  const { q, apps, generated, grants } = useWorld();
   const setModal = useSetAtom(modalAtom);
   const app = apps.find((a) => a.id === appId);
-  const open = appId !== undefined;
-  const list = useListNav({
-    name: "Apps",
-    items: apps,
-    keyOf: (a) => a.id,
-    cursorAtom: appCursorAtom,
-    active: !open,
-    onOpen: (a) => void navigate({ to: "/apps/$appId", params: { appId: a.id } }),
-  });
-  const generate = useAction({ id: "app.new", label: "Generate an app", keys: ["c"], group: "Apps", enabled: !open, run: () => setModal({ kind: "newApp" }) });
-  return (
-    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] md:grid-cols-[18rem_minmax(0,1fr)]">
-      <section className={`flex min-h-0 flex-col bg-pane ${open ? "max-md:hidden" : ""}`} aria-label="Apps" data-focused={open ? undefined : ""}>
-        <div className={`${buttons} px-1.5 py-1`}>
-          <ActionButton action={generate} />
-        </div>
-        <ul ref={list.listRef} className={pane}>
-          {apps.map((a) => (
-            <li key={a.id} className={`${item} ${a.id === appId ? "bg-hover" : ""}`} {...list.rowProps(a)}>
-              <span className="min-w-0 flex-1 truncate font-medium">{a.name}</span>
-              <span className={chip()}>{generated.includes(a) ? `${a.kind}, generated` : a.kind}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-      {app ? (
-        <AppPane app={app} generated={generated.includes(app)} />
-      ) : (
-        <p className={`${state()} ${open ? "" : "max-md:hidden"}`}>{open ? "That app is gone. What this tab generates lives in its memory, so a reload clears it." : "Open an app to see what an agent can ask of it."}</p>
-      )}
-    </div>
+  const back = (
+    <Link to="/apps" className="self-start font-medium text-accent hover:text-accent-strong">
+      All apps
+    </Link>
   );
-}
-
-function AppPane({ app, generated }: { app: AppSpec; generated: boolean }) {
-  const { grants } = useWorld();
-  const navigate = useNavigate();
-  const setModal = useSetAtom(modalAtom);
+  if (!q.data) {
+    return (
+      <Page>
+        <QueryState q={q} what="this app">
+          {() => null}
+        </QueryState>
+      </Page>
+    );
+  }
+  if (!app) {
+    return (
+      <Page>
+        {back}
+        <h1 className="text-2xl font-semibold">That app is gone</h1>
+        <p className="text-muted">Apps you generate live only in this tab's memory, so a reload clears them.</p>
+      </Page>
+    );
+  }
   const own = grants.filter((g) => g.appId === app.id);
-  const back = useBack(() => void navigate({ to: "/apps" }));
-  const list = useListNav<Grant>({
-    name: "Grants",
-    items: own,
-    keyOf: (g) => g.id,
-    cursorAtom: grantCursorAtom,
-    active: true,
-    openLabel: "Sign a token from it",
-    openKeys: ["Enter", "l", "ArrowRight"],
-    openOnClick: false,
-    onOpen: (g) => setModal({ kind: "newToken", tab: "grants", grantId: g.id }),
-  });
-  const g = list.current;
-  const write = useAction({ id: "grant.new", label: "Write a grant", keys: ["c"], group: "Grants", run: () => setModal({ kind: "grant", appId: app.id }) });
-  const sign = useAction({ id: "grant.sign", label: "Sign a token from it", keys: ["s"], group: "Grants", enabled: !!g, run: () => g && setModal({ kind: "newToken", tab: "grants", grantId: g.id }) });
-  // Starter grants come from the API and stay as they are.
-  const edit = useAction({ id: "grant.edit", label: "Edit grant", keys: ["e"], group: "Grants", enabled: !!g && !g.starter, run: () => g && setModal({ kind: "grant", appId: app.id, grantId: g.id }) });
-  const remove = useAction({ id: "grant.delete", label: "Delete grant", keys: ["d"], group: "Grants", enabled: !!g && !g.starter, run: () => g && setModal({ kind: "deleteGrant", grantId: g.id }) });
-  const removeApp = useAction({ id: "app.delete", label: "Delete app", keys: ["D"], group: "Apps", enabled: generated, run: () => setModal({ kind: "deleteApp", appId: app.id }) });
   const flags = (lines: string[]) => {
     const parsed = parseGrant(lines, app);
     return parsed.ok ? audit([parsed.lines], [app]) : [];
   };
   return (
-    <section className="flex min-h-0 flex-col" aria-label={app.name} data-focused="">
-      <div className={`${buttons} bg-pane px-1.5 py-1`}>
-        <span className="md:hidden">
-          <ActionButton action={back} />
-        </span>
-        <ActionButton action={write} />
-        <ActionButton action={sign} tone="primary" />
-        <ActionButton action={edit} />
-        <ActionButton action={remove} tone="danger" />
-        {generated && <ActionButton action={removeApp} tone="danger" />}
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto overscroll-none pb-6">
-        <div className="flex flex-col gap-1 px-3.5 py-3">
-          <h1 className="font-semibold">{app.name}</h1>
+    <Page>
+      {back}
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex max-w-[60ch] flex-col gap-1">
+          <h1 className="text-2xl font-semibold">{app.name}</h1>
           <p className="text-muted">{app.description}</p>
         </div>
+        {/* Built-in apps come from the API and stay. */}
+        {generated.includes(app) && (
+          <Button variant="danger" onClick={() => setModal({ kind: "deleteApp", appId: app.id })}>
+            Delete this app
+          </Button>
+        )}
+      </header>
 
-        <h2 className="px-3.5 pt-3 pb-1 font-semibold">Grants</h2>
-        {own.length === 0 && <p className={state()}>No grants for {app.name} yet. A grant is a set of lines you can sign into a token more than once.</p>}
-        <ul ref={list.listRef}>
-          {own.map((grant) => (
-            <li key={grant.id} className={`${item} flex-col items-start gap-1`} {...list.rowProps(grant)}>
-              <span className="font-medium">{grant.name}</span>
-              {grant.lines.map((l, i) => (
-                <span key={i} className="font-serif text-[1.05rem] leading-snug">
+      <section className="flex flex-col gap-3" aria-labelledby="grants-heading">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 id="grants-heading" className="text-lg font-semibold">
+            <Term k="grant">Grants</Term>
+          </h2>
+          <Button onClick={() => setModal({ kind: "grant", appId: app.id })}>Write a grant</Button>
+        </div>
+        {own.length === 0 && <p className="rounded-2xl bg-paper p-4 text-muted ring-1 ring-line">No grants for {app.name} yet.</p>}
+        {own.map((g) => (
+          <article key={g.id} className="flex flex-col gap-3 rounded-2xl bg-paper p-4 ring-1 ring-line">
+            <h3 className="font-semibold">{g.name}</h3>
+            <ul className="flex flex-col gap-1.5">
+              {g.lines.map((l, i) => (
+                <li key={i} className="font-serif text-[1.05rem] leading-snug">
                   {l}
-                </span>
+                </li>
               ))}
-              {flags(grant.lines).map((f, i) => (
-                <span key={i} className={`${chip("warn")} whitespace-normal`}>
-                  {f.message}
-                </span>
-              ))}
-            </li>
-          ))}
-        </ul>
+            </ul>
+            <Findings findings={flags(g.lines)} />
+            <div className="flex flex-wrap gap-2">
+              <Button small variant="primary" onClick={() => setModal({ kind: "mint", grantId: g.id })}>
+                Mint a token from it
+              </Button>
+              {/* Starter grants come from the API and stay as they are. */}
+              {!g.starter && (
+                <>
+                  <Button small onClick={() => setModal({ kind: "grant", appId: app.id, grantId: g.id })}>
+                    Edit
+                  </Button>
+                  <Button small variant="danger" onClick={() => setModal({ kind: "deleteGrant", grantId: g.id })}>
+                    Delete
+                  </Button>
+                </>
+              )}
+            </div>
+          </article>
+        ))}
+      </section>
 
-        <h2 className="px-3.5 pt-5 pb-1 font-semibold">Actions</h2>
-        <ul>
+      <section className="flex flex-col gap-3" aria-labelledby="actions-heading">
+        <h2 id="actions-heading" className="text-lg font-semibold">
+          Actions
+        </h2>
+        <ul className="flex flex-col overflow-hidden rounded-2xl bg-paper ring-1 ring-line">
           {app.actions.map((a) => (
-            <li key={a.id} className="flex flex-col gap-0.5 px-3.5 py-2">
-              <span className="flex flex-wrap items-baseline gap-x-3">
-                <span className="font-medium">{a.phrase}</span>
-                <code className="text-muted">{a.params.map((p) => `${p.name}: ${p.type === "number" ? "whole number" : "text"}`).join(", ")}</code>
-                {a.risky && <span className={chip("warn")}>risky</span>}
-              </span>
-              <span className="text-muted">{a.description}</span>
+            <li key={a.id} className="flex flex-col gap-1.5 border-line p-4 not-first:border-t">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                <h3 className="font-semibold">{a.phrase}</h3>
+                <span className="font-mono text-[0.8rem] text-muted">{a.params.map((p) => `${p.name}: ${p.type === "number" ? "whole number" : "text"}`).join(", ") || "no values"}</span>
+              </div>
+              <p className="text-muted">{a.description}</p>
+              <Disclosure label="Sentences a grant can use">
+                <ul className="flex flex-col gap-1">
+                  {templatesFor(a).map((s) => (
+                    <li key={s} className="font-serif leading-snug">
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              </Disclosure>
             </li>
           ))}
         </ul>
-      </div>
-    </section>
+      </section>
+    </Page>
   );
 }
