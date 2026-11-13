@@ -1,46 +1,42 @@
 // Signing and verification, on the Biscuit WebAssembly build.
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 import { blockCode, parseBlock, type AppSpec, type BlockLine } from "./grammar.ts";
+import * as glue from "../vendor/biscuit-wasm/biscuit_bg.js";
+import * as inline0 from "../vendor/biscuit-wasm/snippets/biscuit-auth-314ca57174ae0e6d/inline0.js";
 
-type Lib = typeof import("@biscuit-auth/biscuit-wasm");
+type Lib = typeof import("../vendor/biscuit-wasm/biscuit_bg.d.ts");
+
+/** The compiled library as either a module or its raw bytes. */
+export type WasmSource = WebAssembly.Module | BufferSource;
+
 let lib: Promise<Lib> | undefined;
 
 /**
- * The package's entry imports its .wasm file as an ES module, which Node only does behind a flag. Instantiating
- * it by hand works on any Node version and under Vite alike.
+ * Hands the loader the Biscuit WebAssembly before any route runs. Which form fits depends on where the app
+ * runs, which is why the package does not pick one: Cloudflare Workers forbid compiling WebAssembly from
+ * bytes at runtime and want the module a bundler produced from `api/biscuit.wasm`; Node has no such
+ * import and reads the bytes from disk (see `api/node`). Calling it twice is harmless; the first wins.
  */
-function load(): Promise<Lib> {
-  return (lib ??= (async () => {
-    // pnpm links the dependency into this package's own node_modules, so look upward from this file first,
-    // then from the working directory (a bundled build no longer sits next to it).
-    const rel = "node_modules/@biscuit-auth/biscuit-wasm/module";
-    const starts = [path.dirname(fileURLToPath(import.meta.url)), process.cwd(), path.resolve(process.cwd(), "../../packages/api")];
-    let mod: string | undefined;
-    for (let dir of starts) {
-      while (!mod) {
-        if (existsSync(path.join(dir, rel))) mod = path.join(dir, rel);
-        const up = path.dirname(dir);
-        if (up === dir) break;
-        dir = up;
-      }
-    }
-    if (!mod) throw new Error("@biscuit-auth/biscuit-wasm is not installed.");
-    const found = mod;
-    const href = (file: string) => pathToFileURL(path.resolve(found, file)).href;
-    const glue = await import(/* @vite-ignore */ href("biscuit_bg.js"));
-    const wasm = await WebAssembly.compile(await readFile(path.join(found, "biscuit_bg.wasm")));
+export function init(wasm: WasmSource | Promise<WasmSource>): void {
+  lib ??= (async () => {
+    const source = await wasm;
+    const module = source instanceof WebAssembly.Module ? source : await WebAssembly.compile(source);
+    // The module's two imports are the glue and one inline snippet; both are vendored next to the binary.
     const imports: Record<string, WebAssembly.ModuleImports> = {};
-    for (const { module } of WebAssembly.Module.imports(wasm)) {
-      imports[module] ??= module === "./biscuit_bg.js" ? glue : await import(/* @vite-ignore */ href(module));
+    for (const { module: name } of WebAssembly.Module.imports(module)) {
+      if (name === "./biscuit_bg.js") imports[name] = glue as unknown as WebAssembly.ModuleImports;
+      else if (name.endsWith("/inline0.js")) imports[name] = inline0 as unknown as WebAssembly.ModuleImports;
+      else throw new Error(`biscuit_bg.wasm imports ${name}, which is not vendored.`);
     }
-    const { exports } = await WebAssembly.instantiate(wasm, imports);
+    const { exports } = await WebAssembly.instantiate(module, imports);
     glue.__wbg_set_wasm(exports);
     (exports.__wbindgen_start as () => void)();
-    return glue as Lib;
-  })());
+    return glue as unknown as Lib;
+  })();
+}
+
+function load(): Promise<Lib> {
+  if (!lib) throw new Error("The Biscuit WebAssembly is not loaded. Call init() from \"api\" first, or import \"api/node\" on Node.");
+  return lib;
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : JSON.stringify(e));

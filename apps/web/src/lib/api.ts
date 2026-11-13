@@ -1,5 +1,5 @@
 // The typed client for packages/api: paths, bodies and responses are inferred from the Hono routes.
-import type { AppType } from "api";
+import type { AppType } from "../server/api";
 import { hc, type InferRequestType, type InferResponseType } from "hono/client";
 
 const routes = () => hc<AppType>(window.location.origin).api;
