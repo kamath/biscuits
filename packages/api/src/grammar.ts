@@ -198,6 +198,9 @@ export function blockCode(lines: BlockLine[]): string {
   return lines.map((l, i) => `sentence(${i}, ${str(l.text)});\n${l.datalog};`).join("\n");
 }
 
+/** A parameter's example as a value a line can carry. */
+const exampleValue = (p: Param): string | number => (p.type === "number" ? (INTEGER.test(p.example) ? Number(p.example) : 100) : SAFE_STRING.test(p.example) ? p.example : "…");
+
 /** Every sentence shape an action accepts, with example values, for the action's reference pane. */
 export function templatesFor(action: AppAction): string[] {
   const out = [`It may ${action.phrase}`];
@@ -218,6 +221,8 @@ export type Finding = {
   /** broad: a risky action with nothing limiting it. loose: limited in part, or in a way that limits nothing. */
   level: "broad" | "loose";
   message: string;
+  /** Lines that would close the gap, one per unlimited value, each with an example value to be edited. */
+  fixes: Line[];
 };
 
 const list = (names: string[]) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`);
@@ -242,14 +247,16 @@ export function audit(blocks: BlockLine[][], specs: AppSpec[]): Finding[] {
     const real = limits.filter((l) => !(typeof l.value === "string" && l.value === "" && l.op !== "is"));
     const open = action.params.filter((p) => !real.some((l) => l.param === p.name)).map((p) => p.name);
     const floorOnly = action.params.filter((p) => p.type === "number" && real.some((l) => l.param === p.name) && !real.some((l) => l.param === p.name && l.op !== "at_least")).map((p) => p.name);
+    const fixes = (names: string[]) =>
+      action.params.filter((p) => names.includes(p.name)).map((p): Line => ({ kind: "where", app: line.app, action: line.action, param: p.name, op: p.type === "number" ? "at_most" : "is", value: exampleValue(p) }));
     if (action.params.length === 0) {
-      findings.push({ sentence: may.text, level: "loose", message: `Nothing about “${action.phrase}” can be limited, so this permits every use of it.` });
+      findings.push({ sentence: may.text, level: "loose", message: `Nothing about “${action.phrase}” can be limited, so this permits every use of it.`, fixes: [] });
     } else if (open.length === action.params.length) {
-      findings.push({ sentence: may.text, level: "broad", message: `No limit on ${list(open)}: it may ${action.phrase} with any ${list(open)} at all.` });
+      findings.push({ sentence: may.text, level: "broad", message: `No limit on ${list(open)}: it may ${action.phrase} with any ${list(open)} at all.`, fixes: fixes(open) });
     } else if (open.length > 0) {
-      findings.push({ sentence: may.text, level: "loose", message: `No limit on ${list(open)}.` });
+      findings.push({ sentence: may.text, level: "loose", message: `No limit on ${list(open)}.`, fixes: fixes(open) });
     } else if (floorOnly.length > 0) {
-      findings.push({ sentence: may.text, level: "loose", message: `${list(floorOnly)} has a minimum but no maximum.` });
+      findings.push({ sentence: may.text, level: "loose", message: `${list(floorOnly)} has a minimum but no maximum.`, fixes: fixes(floorOnly) });
     }
   }
   return findings;
