@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { audit, parseGrant, templatesFor } from "api/grammar";
 import { useSetAtom } from "jotai";
 import { modalAtom } from "../lib/state.ts";
-import { Button, Disclosure, QueryState, Tag } from "./kit.tsx";
+import { Button, Disclosure, QueryState, Tag, Term } from "./kit.tsx";
 import { Findings } from "./pass.tsx";
 import { useWorld } from "./shared.tsx";
 import { Page } from "./tokens.tsx";
@@ -102,7 +102,10 @@ export function AppPage({ appId }: { appId: string }) {
             <h2 id="grants-heading" className="text-lg font-semibold">
               Grants
             </h2>
-            <p className="text-muted">Reusable sets of lines, not yet signed. Minting puts one or more of them into a token.</p>
+            <p className="text-muted">
+              A <Term k="grant">grant</Term> is a reusable set of lines, not yet signed. <Term k="mint">Minting</Term> puts one or more of them into a{" "}
+              <Term k="token">token</Term>.
+            </p>
           </div>
           <Button onClick={() => setModal({ kind: "grant", appId: app.id })}>Write a grant</Button>
         </div>

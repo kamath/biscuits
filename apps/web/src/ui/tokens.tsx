@@ -2,7 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useSetAtom } from "jotai";
 import { useState } from "react";
 import { heldTokenAtom, modalAtom, type Token } from "../lib/state.ts";
-import { Button, QueryState, Tag } from "./kit.tsx";
+import { Button, QueryState, Tag, Term } from "./kit.tsx";
 import { auditToken, Pass } from "./pass.tsx";
 import { copy, sound, useWorld } from "./shared.tsx";
 
@@ -22,7 +22,10 @@ export function TokensPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex max-w-[60ch] flex-col gap-1">
           <h1 className="text-2xl font-semibold">Tokens</h1>
-          <p className="text-muted">A token is a set of lines you signed. It can cover several apps, and anyone holding one can attenuate it into a narrower one.</p>
+          <p className="text-muted">
+            A <Term k="token">token</Term> is a set of lines you <Term k="signed">signed</Term>, saying what an agent may do. It can cover several apps, and anyone holding one can{" "}
+            <Term k="attenuate">attenuate</Term> it into a narrower one.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" disabled={!q.data} onClick={() => setModal({ kind: "describeToken" })}>

@@ -2,9 +2,9 @@
 import { CheckboxGroup } from "@base-ui/react/checkbox-group";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import type { Cost } from "api";
+import type { AgentRequest, Cost } from "api";
 import { Tabs } from "@base-ui/react/tabs";
-import { audit, blockCode, parse, parseBlock, parseGrant, qualify, splitLines, templatesFor, type AppSpec, type ParsedBlock } from "api/grammar";
+import { audit, blockCode, parseBlock, parseGrant, parseQualified, qualify, splitLines, type AppSpec, type ParsedBlock } from "api/grammar";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Fragment, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api.ts";
@@ -38,10 +38,12 @@ export function Modals() {
     const app = apps.find((a) => a.id === modal.appId);
     return app ? <GrantEditor app={app} grant={grants.find((g) => g.id === modal.grantId)} onClose={close} /> : null;
   }
-  if (modal.kind === "editToken") return <EditToken token={tokens.find((t) => t.id === modal.tokenId)} hold={modal.hold} onClose={close} />;
+  if (modal.kind === "editToken") {
+    return <EditToken token={tokens.find((t) => t.id === modal.tokenId)} hold={modal.hold} retry={turns.find((t) => t.id === modal.retryTurnId)} onClose={close} />;
+  }
   if (modal.kind === "attenuate") {
     const token = tokens.find((t) => t.id === modal.tokenId);
-    return token ? <Attenuate token={token} hold={modal.hold} onClose={close} /> : null;
+    return token ? <Attenuate token={token} hold={modal.hold} retry={turns.find((t) => t.id === modal.retryTurnId)} onClose={close} /> : null;
   }
   if (modal.kind === "deleteApp") {
     const app = apps.find((a) => a.id === modal.appId);
@@ -450,35 +452,60 @@ function Mint({ preselect, hold, onClose }: { preselect?: string; hold?: boolean
   );
 }
 
-function Attenuate({ token, hold, onClose }: { token: Token; hold?: boolean; onClose: () => void }) {
+/**
+ * Restrictions worth offering for a token. Only actions the token permits are worth restricting, and the one
+ * the agent just used comes first, so the effect of a restriction shows on the very next try.
+ */
+function restrictionsFor(token: Token, specs: AppSpec[], request?: AgentRequest | null): string[] {
+  const first = parseBlock(token.blocks[0] ?? [], specs, false);
+  const granted = first.ok ? first.lines.flatMap((l) => (l.line.kind === "may" ? [l.line] : [])) : [];
+  const asked = (g: { app: string; action: string }) => !!request && request.app === g.app && request.action === g.action;
+  const limits: string[] = [];
+  for (const g of [...granted.filter(asked), ...granted.filter((g) => !asked(g))]) {
+    const action = specs.find((a) => a.id === g.app)?.actions.find((a) => a.id === g.action);
+    for (const p of action?.params ?? []) {
+      const given = asked(g) ? request!.args[p.name] : undefined;
+      // Half of what was just asked for is a limit the same request no longer passes.
+      const value = p.type === "number" ? (given && /^\d+$/.test(given) ? Math.floor(Number(given) / 2) : Number(p.example)) : (given ?? p.example);
+      limits.push(qualify({ kind: "where", app: g.app, action: g.action, param: p.name, op: p.type === "number" ? "at_most" : "is", value }, specs));
+    }
+  }
+  const already = new Set(token.blocks.flat());
+  return [
+    ...limits.filter((s) => !already.has(s)).slice(0, 3),
+    // One "Only on…" per app when there is a choice to make, then a deadline.
+    ...(specs.length > 1 ? specs.map((a) => `Only on ${a.name}`) : []),
+    `Only before ${new Date().getUTCFullYear() + 1}-01-01`,
+  ].filter((s) => parseQualified(s, specs).ok);
+}
+
+function Attenuate({ token, hold, retry, onClose }: { token: Token; hold?: boolean; retry?: Turn; onClose: () => void }) {
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
   const { apps } = useWorld();
   const specs = apps.filter((a) => token.appIds.includes(a.id));
   const setTokens = useSetAtom(tokensAtom);
   const land = useLand(hold);
+  const send = useSend();
   const parsed = parseBlock(splitLines(text), specs, true);
   const attenuate = useMutation({
     mutationFn: (lines: string[]) => api.attenuateToken({ specs, token: token.token, publicKey: token.publicKey, lines }),
     onSuccess: (made, lines) => {
-      const id = newId();
       // A new token beside the original: the starting token still works as it did.
-      setTokens((all) => [...all, { ...token, id, name: `${token.name}, narrowed`.slice(0, 80), parentId: token.id, how: "attenuated", blocks: [...token.blocks, lines], token: made.token, preset: false }]);
+      const narrowed: Token = { ...token, id: newId(), name: `${token.name}, narrowed`.slice(0, 80), parentId: token.id, how: "attenuated", blocks: [...token.blocks, lines], token: made.token, preset: false };
+      setTokens((all) => [...all, narrowed]);
+      if (retry) send.mutate({ text: retry.text, request: retry.request ?? undefined, token: narrowed });
       onClose();
-      land(id);
+      land(narrowed.id);
     },
     onError: fail,
   });
-  const first = specs[0]!;
-  const withParam = first.actions.find((a) => a.params.length);
-  const example = withParam ? parse(templatesFor(withParam)[1]!, first) : null;
-  // One "Only on…" per app when there is a choice to make, then a deadline and one restriction on a value.
-  const examples = [...(specs.length > 1 ? specs.map((a) => `Only on ${a.name}`) : []), "Only before 2027-01-01", example?.ok && qualify(example.line, specs)].filter((s): s is string => !!s);
+  const examples = restrictionsFor(token, specs, retry?.request);
   return (
     <Modal
       onClose={onClose}
-      title="Attenuate into a new token"
-      description={`Anyone holding “${token.name}” can do this without your key. The result can only do less, and the original is unchanged.`}
+      title="Narrow this token (attenuate)"
+      description={`Add restrictions and you get a new token that can only do less. Anyone holding “${token.name}” can do this without your key, and the original is unchanged.${retry ? ` The agent then tries “${retry.text}” again with the narrower one.` : ""}`}
       initialFocus={field}
       wide
     >
@@ -507,7 +534,7 @@ function Attenuate({ token, hold, onClose }: { token: Token; hold?: boolean; onC
         <Footer>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={!parsed.ok || attenuate.isPending}>
-            {attenuate.isPending ? "Attenuating…" : "Attenuate"}
+            {attenuate.isPending ? "Attenuating…" : retry ? "Attenuate and try again" : "Attenuate"}
           </Button>
         </Footer>
       </form>
@@ -524,16 +551,18 @@ const tabClass = "min-h-10 cursor-pointer border-b-2 border-transparent px-3 fon
  * is always a new token; whether a service accepts it depends on who signed it and whether it still says what
  * its sentences say. Without a starting token, this is a place to paste one in.
  */
-function EditToken({ token, hold, onClose }: { token?: Token; hold?: boolean; onClose: () => void }) {
+function EditToken({ token, hold, retry, onClose }: { token?: Token; hold?: boolean; retry?: Turn; onClose: () => void }) {
   const { apps, key } = useWorld();
   const setTokens = useSetAtom(tokensAtom);
   const land = useLand(hold);
+  const send = useSend();
   const specs = token ? apps.filter((a) => token.appIds.includes(a.id)) : apps;
   const first = token && !token.raw ? parseBlock(token.blocks[0] ?? [], specs, false) : null;
   const [code, setCode] = useState(token?.raw ?? (first?.ok ? blockCode(first.lines) : ""));
   const [raw, setRaw] = useState(token?.token ?? "");
   const add = (made: Token) => {
     setTokens((all) => [...all, made]);
+    if (retry) send.mutate({ text: retry.text, request: retry.request ?? undefined, token: made });
     onClose();
     land(made.id);
   };
@@ -601,7 +630,7 @@ function EditToken({ token, hold, onClose }: { token?: Token; hold?: boolean; on
     <Modal
       onClose={onClose}
       title="Edit this token by hand"
-      description={`This is what tampering looks like. You get a new token; “${token.name}” is left as it was.${token.blocks.length > 1 ? " Its attenuations aren't carried over." : ""}`}
+      description={`This is what tampering looks like. You get a new token; “${token.name}” is left as it was.${token.blocks.length > 1 ? " Its attenuations aren't carried over." : ""}${retry ? ` The agent then tries “${retry.text}” again with the edited one.` : ""}`}
       wide
     >
       <Tabs.Root defaultValue="datalog" className="flex flex-col gap-3">

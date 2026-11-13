@@ -2,7 +2,7 @@
 import { audit, compile, parseBlock, parseQualified, render, type AppSpec, type BlockLine, type Finding, type Line } from "api/grammar";
 import type { ReactNode } from "react";
 import type { Token } from "../lib/state.ts";
-import { Disclosure, Tag } from "./kit.tsx";
+import { Disclosure, Tag, Term } from "./kit.tsx";
 
 /** One signed sentence: the words in the serif, and optionally the Datalog they compile to. */
 export function Sentence({ text, datalog, tone = "", children }: { text: string; datalog?: string; tone?: string; children?: ReactNode }) {
@@ -72,7 +72,15 @@ export function PassHeading({ token, parent, as: Name = "h3" }: { token: Token; 
     <div className="flex flex-col gap-1">
       <Name className="text-lg leading-tight font-semibold">{token.name}</Name>
       <p className="text-[0.9rem] text-muted">
-        {token.how && (token.parentId || token.how !== "pasted") ? `${ORIGIN[token.how]} ${parent ? `“${parent.name}”` : "a token that has since been deleted"}.` : token.how ? "Pasted in." : "Signed by you."}
+        {token.how && (token.parentId || token.how !== "pasted") ? (
+          `${ORIGIN[token.how]} ${parent ? `“${parent.name}”` : "a token that has since been deleted"}.`
+        ) : token.how ? (
+          "Pasted in."
+        ) : (
+          <>
+            <Term k="signed">Signed</Term> by you.
+          </>
+        )}
       </p>
     </div>
   );
