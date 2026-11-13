@@ -84,7 +84,9 @@ let demo: Promise<{ key: { privateKey: string; publicKey: string }; tokens: z.in
 const demoUser = () =>
   (demo ??= (async () => {
     const key = await newKey();
-    const tokens = await Promise.all(
+    const rootLines = catalog.apps.flatMap((a) => a.actions.map((action) => qualify({ kind: "may", app: a.id, action: action.id }, catalog.apps)));
+    const root = { ...catalog.root, appIds: catalog.apps.map((a) => a.id), lines: rootLines, ...(await mint(catalog.apps, rootLines, key.privateKey)) };
+    const presets = await Promise.all(
       catalog.tokens.map(async (t) => {
         const grants = t.grantIds.map((id) => catalog.grants.find((g) => g.id === id)!);
         const specs = catalog.apps.filter((a) => grants.some((g) => g.appId === a.id));
@@ -95,7 +97,7 @@ const demoUser = () =>
         return { id: t.id, name: t.name, appIds: specs.map((a) => a.id), lines, ...(await mint(specs, lines, key.privateKey)) };
       }),
     );
-    return { key, tokens };
+    return { key, tokens: [root, ...presets] };
   })());
 
 const listApps = createRoute({

@@ -237,3 +237,16 @@ test("the audit flags risky permissions with nothing limiting them", () => {
   assert.deepEqual(audit([open, narrowed.lines], both), []);
   assert.deepEqual(audit([open, off.lines], both), []);
 });
+
+test("the root token allows everything, and attenuating it narrows it without taking any action away", async () => {
+  const all = apps.flatMap((a) => a.actions.map((action) => qualify({ kind: "may", app: a.id, action: action.id }, apps)));
+  const { token, publicKey } = await mint(apps, all, (await newKey()).privateKey);
+  for (const a of apps) for (const action of a.actions) assert.equal((await authorize(apps, token, publicKey, a.id, action.id, {})).verdict, "allowed", `${a.id}.${action.id}`);
+
+  const narrowed = await attenuate(apps, token, publicKey, ["Only on Harbor Bank", 'On Harbor Bank, only send payments where payee is "landlord"']);
+  assert.equal((await authorize(apps, narrowed.token, publicKey, "bank", "send_payment", { payee: "landlord", amount: "1500" })).verdict, "allowed");
+  assert.equal((await authorize(apps, narrowed.token, publicKey, "bank", "send_payment", { payee: "mallory", amount: "1" })).verdict, "denied");
+  assert.equal((await authorize(apps, narrowed.token, publicKey, "mail", "send_message", { recipient: "eve@elsewhere.net" })).verdict, "denied");
+  // Nothing about viewing balances can be limited, so it survives every attenuation that keeps the bank.
+  assert.equal((await authorize(apps, narrowed.token, publicKey, "bank", "view_balance", {})).verdict, "allowed");
+});

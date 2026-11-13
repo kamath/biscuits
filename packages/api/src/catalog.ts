@@ -119,6 +119,14 @@ export const requests: { id: string; name: string; app: string; action: string; 
   { id: "delete-files", name: "Delete everything in /tmp", app: "drive", action: "delete_file", args: { folder: "/tmp" } },
 ];
 
+/**
+ * The token everything else can be narrowed from: every action of every built-in app, with no limits. It comes
+ * first, so it is what the agent holds when the playground opens. Attenuating can add limits to it but never take
+ * a permission back out, so an action with nothing to limit (viewing balances) stays allowed on its app until an
+ * "Only on <another app>" line or a deadline switches it off.
+ */
+export const root = { id: "preset-root", name: "Root: every action on every app" };
+
 /** Tokens minted when the catalogue is first asked for, so there is something to try straight away. */
 export const tokens: { id: string; name: string; grantIds: string[] }[] = [
   { id: "preset-rent", name: "Pay the rent", grantIds: ["pay-rent"] },
