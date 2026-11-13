@@ -3,7 +3,7 @@ import type { Cost } from "api";
 import { audit, parseBlock, type AppSpec, type BlockLine, type Finding } from "api/grammar";
 import { getDefaultStore, useAtomValue } from "jotai";
 import { api, type Estimates } from "../lib/api.ts";
-import { attemptsAtom, generatedAppsAtom, grantsAtom, spendAtom, tokensAtom, type Attempt, type Grant, type Token } from "../lib/state.ts";
+import { attemptsAtom, generatedAppsAtom, grantsAtom, spendAtom, tokensAtom, wantedAtom, type Attempt, type Grant, type Token } from "../lib/state.ts";
 import { toast } from "./toast.tsx";
 
 export const fail = (e: Error) => void toast.error(e.message);
@@ -53,7 +53,8 @@ export function useWorld() {
   const apps: AppSpec[] = [...(q.data?.apps ?? []), ...generated];
   const grants: Grant[] = [...(q.data?.grants ?? []).map((g) => ({ ...g, starter: true })), ...myGrants];
   const tokens: Token[] = [...(q.data?.tokens ?? []).map((t): Token => ({ ...t, preset: true })), ...myTokens];
-  const attempts: Attempt[] = [...(q.data?.requests ?? []).map((r) => ({ ...r, preset: true })), ...myAttempts];
+  const wanted = useAtomValue(wantedAtom);
+  const attempts: Attempt[] = [...(q.data?.requests ?? []).map((r) => ({ ...r, preset: true })), ...myAttempts].map((a) => ({ ...a, wanted: wanted[a.id] ?? a.wanted }));
   return { q, apps, generated, grants, tokens, rows: lineage(tokens), attempts, key: q.data?.key };
 }
 

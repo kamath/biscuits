@@ -176,29 +176,28 @@ test("the preset requests and tokens refer to real apps, actions and grants", as
   for (const t of tokens) if ("from" in t) assert.ok(tokens.some((p) => p.id === t.from), `${t.id}: ${t.from}`);
 });
 
-test("the preset tokens tell one story: handed down they only narrow, and an edited copy is refused", async () => {
+test("the preset token is too broad for the errand, and narrowing it by hand fixes that without a key", async () => {
   const { app } = await import("./index.ts");
   const { requests } = await import("./catalog.ts");
   const res = await app.request("/apps");
-  const { tokens } = (await res.json()) as { tokens: { id: string; parentId: string | null; how: string | null; token: string; publicKey: string }[] };
-  const ask = async (tokenId: string, requestId: string) => {
-    const t = tokens.find((x) => x.id === tokenId)!;
+  const { tokens } = (await res.json()) as { tokens: { id: string; token: string; publicKey: string }[] };
+  const broad = tokens.find((x) => x.id === "assistant")!;
+  const ask = async (token: string, requestId: string) => {
     const r = requests.find((x) => x.id === requestId)!;
-    return (await run(apps, t.token, t.publicKey, r.app, r.action, r.args)).verdict;
+    return (await run(apps, token, broad.publicKey, r.app, r.action, r.args)).verdict;
   };
-  // The broad token lets a hijacked assistant pay a stranger; the copy made for the rent does not.
-  assert.equal(await ask("assistant", "pay-stranger"), "allowed");
-  assert.equal(await ask("rent", "pay-landlord"), "allowed");
-  assert.equal(await ask("rent", "pay-stranger"), "denied");
-  assert.equal(await ask("inbox", "read-team"), "allowed");
-  assert.equal(await ask("inbox", "mail-outside"), "denied");
-  assert.equal(await ask("scheduling", "book-meeting"), "allowed");
-  for (const t of tokens.filter((x) => x.how === "attenuated")) {
-    for (const r of requests) {
-      if ((await ask(t.id, r.id)) === "allowed") assert.equal(await ask(t.parentId!, r.id), "allowed", `${t.id} allows ${r.id} but its parent doesn't`);
-    }
-  }
-  for (const r of requests) assert.equal(await ask("forged", r.id), "invalid", r.id);
+  const leaks = async (token: string) => {
+    const out: string[] = [];
+    for (const r of requests) if ((await ask(token, r.id)) === "allowed" && !r.wanted) out.push(r.id);
+    return out;
+  };
+  // What the workbench opens on: the wanted errand works, and so do four things nobody asked for.
+  assert.equal(await ask(broad.token, "pay-landlord"), "allowed");
+  assert.deepEqual(await leaks(broad.token), ["pay-stranger", "read-team", "mail-outside", "book-meeting"]);
+  // The two controls a first visitor reaches for. No private key is passed anywhere here.
+  const narrowed = await attenuate(apps, broad.token, broad.publicKey, ["Only on Harbor Bank", 'On Harbor Bank, only send payments where payee is "landlord"']);
+  assert.equal(await ask(narrowed.token, "pay-landlord"), "allowed");
+  assert.deepEqual(await leaks(narrowed.token), []);
 });
 
 test("hand-edited Datalog is caught twice over: by the signature, then by its own sentences", async () => {

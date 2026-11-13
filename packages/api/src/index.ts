@@ -130,7 +130,7 @@ const listApps = createRoute({
   description: "The built-in sample services, starter grants for them, a few requests to try, the demo user's signing key, and preset tokens signed with it.",
   responses: {
     200: json(
-      z.object({ apps: z.array(Spec), grants: z.array(Grant), requests: z.array(AgentRequest.extend({ id: z.string(), name: z.string() })), key: z.object({ privateKey: PrivateKey, publicKey: PublicKey }), tokens: z.array(PresetToken) }).openapi("Catalogue"),
+      z.object({ apps: z.array(Spec), grants: z.array(Grant), requests: z.array(AgentRequest.extend({ id: z.string(), name: z.string(), wanted: z.boolean().openapi({ description: "Whether the user means the agent to be able to do this." }) })), key: z.object({ privateKey: PrivateKey, publicKey: PublicKey }), tokens: z.array(PresetToken) }).openapi("Catalogue"),
       "Apps, grants, requests, the signing key and tokens",
     ),
   },

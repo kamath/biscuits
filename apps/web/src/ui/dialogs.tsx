@@ -590,7 +590,7 @@ function EditAttemptForm({ attempt, tokenId, onClose, app, action, first }: { at
           const summary = action.params.filter((p) => args[p.name]).map((p) => `${p.name} ${args[p.name]}`).join(", ");
           // A new column beside the original, as a narrowed token is a new row.
           const id = newId();
-          setAttempts((all) => [...all, { id, name: `${action.phrase[0]!.toUpperCase()}${action.phrase.slice(1)}${summary ? `: ${summary}` : ""}`.slice(0, 80), app: app.id, action: action.id, args }]);
+          setAttempts((all) => [...all, { id, name: `${action.phrase[0]!.toUpperCase()}${action.phrase.slice(1)}${summary ? `: ${summary}` : ""}`.slice(0, 80), app: app.id, action: action.id, args, wanted: attempt.wanted }]);
           onClose();
           show(tokenId, id);
         }}

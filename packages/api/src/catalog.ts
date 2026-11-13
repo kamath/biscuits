@@ -108,21 +108,24 @@ export const grants: StarterGrant[] = [
   { id: "shared-files", appId: "drive", name: "Read the shared folder", lines: ["It may read files", 'Only read files where folder starts with "/shared"'] },
 ];
 
-/** A few requests an agent might send, some of which the preset tokens allow and some of which they don't. */
-export const requests: { id: string; name: string; app: string; action: string; args: Record<string, string> }[] = [
-  { id: "pay-landlord", name: "Pay the landlord 1,500", app: "bank", action: "send_payment", args: { payee: "landlord", amount: "1500" } },
-  { id: "pay-stranger", name: "Pay a stranger 5,000", app: "bank", action: "send_payment", args: { payee: "mallory", amount: "5000" } },
-  { id: "close-savings", name: "Close the savings account", app: "bank", action: "close_account", args: { account: "savings" } },
-  { id: "read-team", name: "Read a message from a teammate", app: "mail", action: "read_message", args: { sender: "sam@example.com", folder: "inbox" } },
-  { id: "mail-outside", name: "Email someone outside the team", app: "mail", action: "send_message", args: { recipient: "eve@elsewhere.net" } },
-  { id: "book-meeting", name: "Add a meeting to the work calendar", app: "calendar", action: "create_event", args: { calendar: "work", attendee: "sam@example.com" } },
-  { id: "delete-files", name: "Delete everything in /tmp", app: "drive", action: "delete_file", args: { folder: "/tmp" } },
+/**
+ * A few requests an agent might send. `wanted` marks the one errand the user means to delegate, paying the rent;
+ * the rest are what a hijacked agent might try instead, and a token that lets them through is too broad.
+ */
+export const requests: { id: string; name: string; app: string; action: string; args: Record<string, string>; wanted: boolean }[] = [
+  { id: "pay-landlord", name: "Pay the landlord 1,500", app: "bank", action: "send_payment", args: { payee: "landlord", amount: "1500" }, wanted: true },
+  { id: "pay-stranger", name: "Pay a stranger 5,000", app: "bank", action: "send_payment", args: { payee: "mallory", amount: "5000" }, wanted: false },
+  { id: "close-savings", name: "Close the savings account", app: "bank", action: "close_account", args: { account: "savings" }, wanted: false },
+  { id: "read-team", name: "Read a message from a teammate", app: "mail", action: "read_message", args: { sender: "sam@example.com", folder: "inbox" }, wanted: false },
+  { id: "mail-outside", name: "Email someone outside the team", app: "mail", action: "send_message", args: { recipient: "eve@elsewhere.net" }, wanted: false },
+  { id: "book-meeting", name: "Add a meeting to the work calendar", app: "calendar", action: "create_event", args: { calendar: "work", attendee: "sam@example.com" }, wanted: false },
+  { id: "delete-files", name: "Delete everything in /tmp", app: "drive", action: "delete_file", args: { folder: "/tmp" }, wanted: false },
 ];
 
 /**
- * The tokens the demo opens on, which tell one story. The user signs a single broad token for their assistant.
- * The assistant hands each errand a narrower copy, which takes no key and no word from the user. Someone edits
- * a copy to say more, and can't sign it. `from` names the token a copy was made from.
+ * The token the demo opens on: one broad token the user signed for their assistant, which lets through far more
+ * than the one errand they mean to delegate. Narrowing it is left to the user, since that is the demo. A preset
+ * can also be a copy made `from` another, narrowed or edited, for a deployment that wants to open on more.
  */
 export type PresetToken =
   | { id: string; name: string; lines: string[] }
@@ -144,19 +147,4 @@ export const tokens: PresetToken[] = [
       "On Stacks, it may read files",
     ],
   },
-  {
-    id: "rent",
-    name: "Rent errand",
-    from: "assistant",
-    restrict: ["Only on Harbor Bank", 'On Harbor Bank, only send payments where payee is "landlord"', "On Harbor Bank, only send payments where amount is at most 2000"],
-  },
-  {
-    id: "inbox",
-    name: "Inbox triage",
-    from: "assistant",
-    restrict: ["Only on Quill Mail", 'On Quill Mail, only read messages where sender ends with "@example.com"', 'On Quill Mail, only send messages where recipient ends with "@example.com"'],
-  },
-  { id: "scheduling", name: "Scheduling", from: "assistant", restrict: ["Only on Daybook", 'On Daybook, only create events where calendar is "work"'] },
-  // Appended to the assistant's own Datalog: a right nobody signed.
-  { id: "forged", name: "Assistant, forged", from: "assistant", forge: 'right("bank", "close_account");' },
 ];

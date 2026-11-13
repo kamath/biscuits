@@ -40,15 +40,15 @@ function Grid({ t, r }: { t?: string; r?: string }) {
   latest.current = cursor;
 
   const search = (c: Cursor) => ({ t: c.t ?? undefined, r: c.r ?? undefined });
-  const show = (c: Cursor) => void navigate({ to: "/", search: search(c) });
+  const show = (c: Cursor) => void navigate({ to: "/board", search: search(c) });
   const place = (c: Cursor) => {
     latest.current = c;
-    if (open) void navigate({ to: "/", search: search(c), replace: true });
+    if (open) void navigate({ to: "/board", search: search(c), replace: true });
     else setRest(c);
   };
   const close = () => {
     setRest(cursor);
-    void navigate({ to: "/", search: {} });
+    void navigate({ to: "/board", search: {} });
   };
   /** From the latest cursor, not this render's: key repeats can arrive faster than React re-renders. */
   const go = (dt: number, dr: number) => {
@@ -196,7 +196,7 @@ function Cell({ token, attempt, apps, at, inLine, onShow }: { token: Token; atte
 }
 
 /** Words in, an attempt out: the model works out which action of which app is meant, and it joins the board. */
-function Try({ apps, onAdded }: { apps: AppSpec[]; onAdded: (id: string) => void }) {
+export function Try({ apps, onAdded }: { apps: AppSpec[]; onAdded: (id: string) => void }) {
   const [text, setText] = useState("");
   const form = useRef<HTMLFormElement>(null);
   const field = useRef<HTMLInputElement>(null);
@@ -207,7 +207,8 @@ function Try({ apps, onAdded }: { apps: AppSpec[]; onAdded: (id: string) => void
       recordCost(made.cost);
       if (!made.request) return void toast.error(made.note || "No app has an action for that.");
       const id = newId();
-      setAttempts((all) => [...all, { id, name: words, ...made.request!, cost: made.cost }]);
+      // Something typed in is a probe until the user says they want it to work.
+      setAttempts((all) => [...all, { id, name: words, ...made.request!, wanted: false, cost: made.cost }]);
       setText("");
       field.current?.blur();
       onAdded(id);

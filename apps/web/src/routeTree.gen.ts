@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BoardRouteImport } from './routes/board'
 import { Route as ApiSplatRouteImport } from './routes/api.$'
 import { Route as AppsIndexRouteImport } from './routes/apps.index'
 import { Route as AppsAppIdRouteImport } from './routes/apps.$appId'
@@ -17,6 +18,11 @@ import { Route as AppsAppIdRouteImport } from './routes/apps.$appId'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BoardRoute = BoardRouteImport.update({
+  id: '/board',
+  path: '/board',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
@@ -37,12 +43,14 @@ const AppsAppIdRoute = AppsAppIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/board': typeof BoardRoute
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRoute
   '/apps/': typeof AppsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/board': typeof BoardRoute
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRoute
   '/apps': typeof AppsIndexRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/board': typeof BoardRoute
   '/api/$': typeof ApiSplatRoute
   '/apps/$appId': typeof AppsAppIdRoute
   '/apps/': typeof AppsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/$' | '/apps/$appId' | '/apps/'
+  fullPaths: '/' | '/board' | '/api/$' | '/apps/$appId' | '/apps/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/$' | '/apps/$appId' | '/apps'
-  id: '__root__' | '/' | '/api/$' | '/apps/$appId' | '/apps/'
+  to: '/' | '/board' | '/api/$' | '/apps/$appId' | '/apps'
+  id: '__root__' | '/' | '/board' | '/api/$' | '/apps/$appId' | '/apps/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BoardRoute: typeof BoardRoute
   ApiSplatRoute: typeof ApiSplatRoute
   AppsAppIdRoute: typeof AppsAppIdRoute
   AppsIndexRoute: typeof AppsIndexRoute
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/board': {
+      id: '/board'
+      path: '/board'
+      fullPath: '/board'
+      preLoaderRoute: typeof BoardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/$': {
@@ -104,6 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BoardRoute: BoardRoute,
   ApiSplatRoute: ApiSplatRoute,
   AppsAppIdRoute: AppsAppIdRoute,
   AppsIndexRoute: AppsIndexRoute,

@@ -1,6 +1,7 @@
 // The pane beside the board: whatever the cursor is on, laid open. A token, an attempt, or the two together
 // with the service's answer.
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import type { AppSpec } from "api/grammar";
 import { useAtom, useSetAtom } from "jotai";
 import { datalogAtom, modalAtom, type Attempt, type Token } from "../lib/state.ts";
@@ -39,6 +40,8 @@ export function Detail({ token, attempt, missing, apps, tokens, onClose }: { tok
     enabled: !!token && sound(token),
     run: () => token && setModal({ kind: "attenuate", tokenId: token.id, attemptId: attempt?.id }),
   });
+  const navigate = useNavigate();
+  const bench = useAction({ id: "token.bench", label: "Put on the bench", keys: ["b"], group: "Token", enabled: !!token, run: () => token && void navigate({ to: "/", search: { t: token.id } }) });
   const tamper = useAction({ id: "token.tamper", label: "Tamper", keys: ["e"], group: "Token", enabled: !!token, run: () => token && setModal({ kind: "tamper", tokenId: token.id, attemptId: attempt?.id }) });
   const yank = useAction({ id: "token.copy", label: "Copy token", keys: ["y"], group: "Token", enabled: !!token, run: () => token && void copy(token.token, "the token") });
   const removeToken = useAction({
@@ -134,7 +137,8 @@ export function Detail({ token, attempt, missing, apps, tokens, onClose }: { tok
         <div className={`${buttons} px-1.5 py-2`}>
           {token && (
             <>
-              <ActionButton action={narrow} tone="primary" />
+              <ActionButton action={bench} tone="primary" />
+              <ActionButton action={narrow} />
               <ActionButton action={tamper} />
               <ActionButton action={yank} />
             </>

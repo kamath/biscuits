@@ -12,17 +12,19 @@ import { tab } from "./tw.ts";
 export function Layout({ children }: { children: ReactNode }) {
   const spend = useAtomValue(spendAtom);
   const navigate = useNavigate();
-  const inApps = useRouterState({ select: (s) => s.location.pathname.startsWith("/apps") });
-  const board = useAction({ id: "nav.board", label: "Board", keys: ["1"], group: "Navigate", run: () => void navigate({ to: "/", search: {} }) });
-  const apps = useAction({ id: "nav.apps", label: "Apps", keys: ["2"], group: "Navigate", run: () => void navigate({ to: "/apps" }) });
+  const at = useRouterState({ select: (s) => (s.location.pathname.startsWith("/apps") ? "apps" : s.location.pathname.startsWith("/board") ? "board" : "bench") });
+  const bench = useAction({ id: "nav.bench", label: "Workbench", keys: ["1"], group: "Navigate", run: () => void navigate({ to: "/", search: {} }) });
+  const board = useAction({ id: "nav.board", label: "Board", keys: ["2"], group: "Navigate", run: () => void navigate({ to: "/board", search: {} }) });
+  const apps = useAction({ id: "nav.apps", label: "Apps", keys: ["3"], group: "Navigate", run: () => void navigate({ to: "/apps" }) });
   return (
     <div className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]">
       <header className="flex items-stretch bg-bar">
         <span className="flex items-center px-3.5 font-serif text-lg font-semibold max-sm:hidden">Biscuits</span>
         <nav className="flex" aria-label="Sections">
           {[
-            { action: board, active: !inApps },
-            { action: apps, active: inApps },
+            { action: bench, active: at === "bench" },
+            { action: board, active: at === "board" },
+            { action: apps, active: at === "apps" },
           ].map(({ action, active }) => (
             <Button
               key={action.id}
