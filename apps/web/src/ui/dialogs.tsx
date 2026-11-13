@@ -421,7 +421,7 @@ function Mint({ preselect, hold, onClose }: { preselect?: string; hold?: boolean
         }}
       >
         <TextField ref={field} label="Name" name="name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder={fallback || "named after its grants"} autoComplete="off" />
-        <CheckboxGroup aria-label="Grants to sign together" value={picked} onValueChange={setPicked} className="flex max-h-[38vh] flex-col overflow-auto overscroll-contain rounded-lg ring-1 ring-line">
+        <CheckboxGroup aria-label="Grants to sign together" value={picked} onValueChange={setPicked} className="flex max-h-[38vh] flex-col overflow-auto overscroll-y-none rounded-lg ring-1 ring-line">
           {apps
             .filter((a) => grants.some((g) => g.appId === a.id))
             .map((a) => (

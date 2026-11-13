@@ -82,6 +82,11 @@
   #root {
     height: 100%;
   }
+  /* No vertical rubber-band bounce. Only the y axis, so horizontal swipes still go back and forward. */
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
   body {
     background: var(--page);
     color: var(--ink);

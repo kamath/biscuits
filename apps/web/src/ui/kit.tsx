@@ -84,7 +84,7 @@ export function Modal({
         <Dialog.Backdrop className="fixed inset-0 bg-scrim" />
         <Dialog.Popup
           initialFocus={initialFocus}
-          className={`fixed top-[8vh] left-1/2 flex max-h-[84vh] w-[calc(100vw-24px)] -translate-x-1/2 flex-col gap-4 overflow-auto overscroll-contain rounded-2xl bg-paper p-5 shadow-2xl ${wide ? "max-w-2xl" : "max-w-lg"}`}
+          className={`fixed top-[8vh] left-1/2 flex max-h-[84vh] w-[calc(100vw-24px)] -translate-x-1/2 flex-col gap-4 overflow-auto overscroll-y-none rounded-2xl bg-paper p-5 shadow-2xl ${wide ? "max-w-2xl" : "max-w-lg"}`}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-col gap-1">
