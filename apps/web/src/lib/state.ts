@@ -60,9 +60,10 @@ export type ModalState =
   /** Describe a token for the model to draft. `hold` puts the result in the agent's hand. */
   | { kind: "describeToken"; hold?: boolean }
   | { kind: "mint"; grantId?: string; hold?: boolean }
-  | { kind: "attenuate"; tokenId: string; hold?: boolean }
+  /** `retryTurnId` names a request the agent already made: it is sent again with the token that results. */
+  | { kind: "attenuate"; tokenId: string; hold?: boolean; retryTurnId?: string }
   /** Edit a token's Datalog or raw text by hand. Without a token, paste one in. */
-  | { kind: "editToken"; tokenId?: string; hold?: boolean }
+  | { kind: "editToken"; tokenId?: string; hold?: boolean; retryTurnId?: string }
   /** Change the values of a request the agent already made, and send it again. */
   | { kind: "editTurn"; turnId: string }
   | { kind: "deleteApp"; appId: string }

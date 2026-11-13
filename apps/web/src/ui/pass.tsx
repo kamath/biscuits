@@ -2,15 +2,19 @@
 import { audit, compile, parseBlock, parseQualified, render, type AppSpec, type BlockLine, type Finding, type Line } from "api/grammar";
 import type { ReactNode } from "react";
 import type { Token } from "../lib/state.ts";
-import { Disclosure, Tag } from "./kit.tsx";
+import { Disclosure, Tag, Term } from "./kit.tsx";
 
 /** One signed sentence: the words in the serif, and optionally the Datalog they compile to. */
-export function Sentence({ text, datalog, tone = "", children }: { text: string; datalog?: string; tone?: string; children?: ReactNode }) {
+export function Sentence({ text, datalog, tone = "", added, children }: { text: string; datalog?: string; tone?: string; added?: boolean; children?: ReactNode }) {
   return (
     <div className={`flex items-start gap-2.5 ${tone}`}>
       {children}
       <div className="min-w-0">
-        <p className="font-serif text-[1.05rem] leading-snug">{text}</p>
+        <p className="font-serif text-[1.05rem] leading-snug">
+          {text}
+          {/* An attenuation: a line some holder appended, not one the signer wrote. */}
+          {added && <span className="ml-2 rounded-full bg-well px-2 py-0.5 align-middle font-sans text-[0.75rem] whitespace-nowrap text-muted">added by a holder</span>}
+        </p>
         {datalog && <code className="block pt-1 font-mono text-[0.78rem] leading-snug break-words text-muted">{datalog}</code>}
       </div>
     </div>
@@ -72,7 +76,15 @@ export function PassHeading({ token, parent, as: Name = "h3" }: { token: Token; 
     <div className="flex flex-col gap-1">
       <Name className="text-lg leading-tight font-semibold">{token.name}</Name>
       <p className="text-[0.9rem] text-muted">
-        {token.how && (token.parentId || token.how !== "pasted") ? `${ORIGIN[token.how]} ${parent ? `“${parent.name}”` : "a token that has since been deleted"}.` : token.how ? "Pasted in." : "Signed by you."}
+        {token.how && (token.parentId || token.how !== "pasted") ? (
+          `${ORIGIN[token.how]} ${parent ? `“${parent.name}”` : "a token that has since been deleted"}.`
+        ) : token.how ? (
+          "Pasted in."
+        ) : (
+          <>
+            <Term k="signed">Signed</Term> by you.
+          </>
+        )}
       </p>
     </div>
   );
@@ -87,12 +99,10 @@ const card = "flex flex-col gap-3 rounded-xl bg-paper p-3.5 ring-1 ring-line";
 export function PassBody({ token, specs, showDatalog }: { token: Token; specs: AppSpec[]; showDatalog?: boolean }) {
   const findings = auditToken(token, specs);
   const rows = token.raw ? [] : read(token, specs);
-  const attenuated = token.blocks.length > 1;
 
   const clause = (row: Row, words: string) => (
     <div key={`${row.block}:${row.text}`} className="flex flex-col gap-1.5">
-      <Sentence text={words} datalog={showDatalog ? (row.line ? `${compile(row.line)};` : row.error) : undefined} />
-      {row.block > 0 && <p className="text-[0.85rem] text-muted">Added by a holder, not part of what you signed.</p>}
+      <Sentence text={words} datalog={showDatalog ? (row.line ? `${compile(row.line)};` : row.error) : undefined} added={row.block > 0} />
       {row.block === 0 && findings.filter((f) => f.sentence === row.text).map((f, k) => <Flag key={k} finding={f} />)}
     </div>
   );
@@ -104,18 +114,17 @@ export function PassBody({ token, specs, showDatalog }: { token: Token; specs: A
     <div className="flex flex-col gap-3">
       {token.how === "edited" && !token.resigned && (
         <p className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-bad">
-          <span className="font-semibold">Edited and not re-signed.</span> Whoever edits a token can't produce your signature, so this one carries someone else's.
+          <span className="font-semibold">Edited, and not signed by you.</span>
         </p>
       )}
       {token.how === "edited" && token.resigned && (
         <p className="rounded-xl bg-warn-soft px-3.5 py-2.5 text-warn">
-          <span className="font-semibold">Edited and re-signed with your key.</span> The signature is yours again. A service still checks that each sentence compiles to the Datalog
-          beside it.
+          <span className="font-semibold">Edited, then re-signed with your key.</span>
         </p>
       )}
       {token.how === "pasted" && !token.verifies && (
         <p className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-bad">
-          <span className="font-semibold">Doesn't verify under your key.</span> Its lines can't be read, because nothing in it can be trusted.
+          <span className="font-semibold">Doesn't verify under your key.</span>
         </p>
       )}
 
@@ -126,13 +135,6 @@ export function PassBody({ token, specs, showDatalog }: { token: Token; specs: A
         </section>
       ) : (
         <>
-          {rows.length > 0 && (
-            <p className="text-[0.9rem] text-muted">
-              {attenuated
-                ? "What a service lets the agent do with this token: the actions you signed, less what holders have since ruled out. Anything not listed is refused."
-                : "What a service lets the agent do with this token. Anything not listed is refused."}
-            </p>
-          )}
           {specs.map((spec) => {
             const mine = rows.filter((r) => r.line && r.line.kind !== "app" && r.line.app === spec.id);
             const acts = spec.actions

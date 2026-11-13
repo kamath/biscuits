@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { audit, parseGrant, templatesFor } from "api/grammar";
 import { useSetAtom } from "jotai";
 import { modalAtom } from "../lib/state.ts";
-import { Button, Disclosure, QueryState, Tag } from "./kit.tsx";
+import { Button, Disclosure, QueryState, Tag, Term } from "./kit.tsx";
 import { Findings } from "./pass.tsx";
 import { useWorld } from "./shared.tsx";
 import { Page } from "./tokens.tsx";
@@ -13,10 +13,7 @@ export function AppsPage() {
   return (
     <Page>
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex max-w-[60ch] flex-col gap-1">
-          <h1 className="text-2xl font-semibold">Apps</h1>
-          <p className="text-muted">The services an agent can act on. Each defines its own actions, and those are the vocabulary a token's lines are written in.</p>
-        </div>
+        <h1 className="text-2xl font-semibold">Apps</h1>
         <Button variant="primary" disabled={!q.data} onClick={() => setModal({ kind: "newApp" })}>
           Generate an app
         </Button>
@@ -98,12 +95,9 @@ export function AppPage({ appId }: { appId: string }) {
 
       <section className="flex flex-col gap-3" aria-labelledby="grants-heading">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="flex max-w-[60ch] flex-col gap-1">
-            <h2 id="grants-heading" className="text-lg font-semibold">
-              Grants
-            </h2>
-            <p className="text-muted">Reusable sets of lines, not yet signed. Minting puts one or more of them into a token.</p>
-          </div>
+          <h2 id="grants-heading" className="text-lg font-semibold">
+            <Term k="grant">Grants</Term>
+          </h2>
           <Button onClick={() => setModal({ kind: "grant", appId: app.id })}>Write a grant</Button>
         </div>
         {own.length === 0 && <p className="rounded-2xl bg-paper p-4 text-muted ring-1 ring-line">No grants for {app.name} yet.</p>}
@@ -139,12 +133,9 @@ export function AppPage({ appId }: { appId: string }) {
       </section>
 
       <section className="flex flex-col gap-3" aria-labelledby="actions-heading">
-        <div className="flex max-w-[60ch] flex-col gap-1">
-          <h2 id="actions-heading" className="text-lg font-semibold">
-            Actions
-          </h2>
-          <p className="text-muted">What an agent can ask {app.name} to do, and the sentences a grant can use about each.</p>
-        </div>
+        <h2 id="actions-heading" className="text-lg font-semibold">
+          Actions
+        </h2>
         <ul className="flex flex-col overflow-hidden rounded-2xl bg-paper ring-1 ring-line">
           {app.actions.map((a) => (
             <li key={a.id} className="flex flex-col gap-1.5 border-line p-4 not-first:border-t">

@@ -2,9 +2,9 @@
 import { CheckboxGroup } from "@base-ui/react/checkbox-group";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import type { Cost } from "api";
+import type { AgentRequest, Cost } from "api";
 import { Tabs } from "@base-ui/react/tabs";
-import { audit, blockCode, parse, parseBlock, parseGrant, qualify, splitLines, templatesFor, type AppSpec, type ParsedBlock } from "api/grammar";
+import { audit, blockCode, parseBlock, parseGrant, parseQualified, qualify, splitLines, type AppSpec, type ParsedBlock } from "api/grammar";
 import { useAtomValue, useSetAtom } from "jotai";
 import { Fragment, useRef, useState, type ReactNode } from "react";
 import { api } from "../lib/api.ts";
@@ -38,10 +38,12 @@ export function Modals() {
     const app = apps.find((a) => a.id === modal.appId);
     return app ? <GrantEditor app={app} grant={grants.find((g) => g.id === modal.grantId)} onClose={close} /> : null;
   }
-  if (modal.kind === "editToken") return <EditToken token={tokens.find((t) => t.id === modal.tokenId)} hold={modal.hold} onClose={close} />;
+  if (modal.kind === "editToken") {
+    return <EditToken token={tokens.find((t) => t.id === modal.tokenId)} hold={modal.hold} retry={turns.find((t) => t.id === modal.retryTurnId)} onClose={close} />;
+  }
   if (modal.kind === "attenuate") {
     const token = tokens.find((t) => t.id === modal.tokenId);
-    return token ? <Attenuate token={token} hold={modal.hold} onClose={close} /> : null;
+    return token ? <Attenuate token={token} hold={modal.hold} retry={turns.find((t) => t.id === modal.retryTurnId)} onClose={close} /> : null;
   }
   if (modal.kind === "deleteApp") {
     const app = apps.find((a) => a.id === modal.appId);
@@ -112,7 +114,7 @@ function LineErrors({ text, parsed }: { text: string; parsed: ParsedBlock }) {
 }
 
 const LeftOut = ({ items }: { items: string[] }) =>
-  items.length > 0 && <p className="rounded-lg bg-warn-soft px-3 py-2 text-warn">These lines can't express the following, so the draft leaves it out: {items.join("; ")}.</p>;
+  items.length > 0 && <p className="rounded-lg bg-warn-soft px-3 py-2 text-warn">Left out, because no line can say it: {items.join("; ")}.</p>;
 
 const Footer = ({ children }: { children: ReactNode }) => <div className="flex flex-wrap items-center justify-end gap-2 pt-1">{children}</div>;
 
@@ -153,7 +155,7 @@ function DraftStep({
         </Button>
         <EstimateNote kind={kind} />
       </div>
-      {cost && <CostNote cost={cost} what="That draft" />}
+      {cost && <CostNote cost={cost} />}
     </form>
   );
 }
@@ -181,7 +183,7 @@ function NewApp({ onClose }: { onClose: () => void }) {
     onError: fail,
   });
   return (
-    <Modal onClose={onClose} title="Generate an app" description="The model invents a service of the kind you name, with actions an agent could take on it." initialFocus={field}>
+    <Modal onClose={onClose} title="Generate an app" initialFocus={field}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -215,7 +217,7 @@ function EditTurn({ turn, onClose }: { turn: Turn; onClose: () => void }) {
   const token = tokens.find((t) => t.id === turn.tokenId) ?? held;
   if (!token) return null;
   return (
-    <Modal onClose={onClose} title="Change the values and send again" description={`${app.name}, ${action.phrase}. Sent with “${token.name}”.`} initialFocus={first}>
+    <Modal onClose={onClose} title="Change the values" description={`${app.name}, ${action.phrase}, holding “${token.name}”.`} initialFocus={first}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -287,7 +289,6 @@ function GrantEditor({ app, grant, onClose }: { app: AppSpec; grant?: Grant; onC
       >
         <LinesField
           label="The lines, one per row"
-          hint="Write them yourself or edit the draft. Each must match one of the app's sentences."
           name="lines"
           value={text}
           onChange={(e) => setText(e.currentTarget.value)}
@@ -346,7 +347,7 @@ function DescribeToken({ hold, onClose }: { hold?: boolean; onClose: () => void 
   });
   const example = apps[0] ? `On ${apps[0].name}, it may ${apps[0].actions[0]!.phrase}` : "";
   return (
-    <Modal onClose={onClose} title="Describe a new token" description="Say what the agent should be allowed to do. The model drafts the lines; you read them, change what you like, and sign." initialFocus={field} wide>
+    <Modal onClose={onClose} title="Describe a new token" initialFocus={field} wide>
       <DraftStep
         inputRef={field}
         label="What should the agent be allowed to do, across your apps?"
@@ -365,7 +366,7 @@ function DescribeToken({ hold, onClose }: { hold?: boolean; onClose: () => void 
           if (parsed.ok && !draft.isPending && !mint.isPending) mint.mutate(parsed.lines.map((l) => l.text));
         }}
       >
-        <LinesField label="The lines to sign, one per row" hint="Write them yourself or edit the draft. Each names its app." name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder={example} />
+        <LinesField label="The lines to sign, one per row" name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder={example} />
         <LineErrors text={text} parsed={parsed} />
         <LeftOut items={left} />
         {parsed.ok && <Findings findings={audit([parsed.lines], apps)} />}
@@ -413,7 +414,7 @@ function Mint({ preselect, hold, onClose }: { preselect?: string; hold?: boolean
     onError: fail,
   });
   return (
-    <Modal onClose={onClose} title="Mint a token from grants" description="Tick the grants to sign together. They can belong to different apps." initialFocus={field}>
+    <Modal onClose={onClose} title="Mint a token from grants" initialFocus={field}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -450,35 +451,60 @@ function Mint({ preselect, hold, onClose }: { preselect?: string; hold?: boolean
   );
 }
 
-function Attenuate({ token, hold, onClose }: { token: Token; hold?: boolean; onClose: () => void }) {
+/**
+ * Restrictions worth offering for a token. Only actions the token permits are worth restricting, and the one
+ * the agent just used comes first, so the effect of a restriction shows on the very next try.
+ */
+function restrictionsFor(token: Token, specs: AppSpec[], request?: AgentRequest | null): string[] {
+  const first = parseBlock(token.blocks[0] ?? [], specs, false);
+  const granted = first.ok ? first.lines.flatMap((l) => (l.line.kind === "may" ? [l.line] : [])) : [];
+  const asked = (g: { app: string; action: string }) => !!request && request.app === g.app && request.action === g.action;
+  const limits: string[] = [];
+  for (const g of [...granted.filter(asked), ...granted.filter((g) => !asked(g))]) {
+    const action = specs.find((a) => a.id === g.app)?.actions.find((a) => a.id === g.action);
+    for (const p of action?.params ?? []) {
+      const given = asked(g) ? request!.args[p.name] : undefined;
+      // Half of what was just asked for is a limit the same request no longer passes.
+      const value = p.type === "number" ? (given && /^\d+$/.test(given) ? Math.floor(Number(given) / 2) : Number(p.example)) : (given ?? p.example);
+      limits.push(qualify({ kind: "where", app: g.app, action: g.action, param: p.name, op: p.type === "number" ? "at_most" : "is", value }, specs));
+    }
+  }
+  const already = new Set(token.blocks.flat());
+  return [
+    ...limits.filter((s) => !already.has(s)).slice(0, 3),
+    // One "Only on…" per app when there is a choice to make, then a deadline.
+    ...(specs.length > 1 ? specs.map((a) => `Only on ${a.name}`) : []),
+    `Only before ${new Date().getUTCFullYear() + 1}-01-01`,
+  ].filter((s) => parseQualified(s, specs).ok);
+}
+
+function Attenuate({ token, hold, retry, onClose }: { token: Token; hold?: boolean; retry?: Turn; onClose: () => void }) {
   const field = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
   const { apps } = useWorld();
   const specs = apps.filter((a) => token.appIds.includes(a.id));
   const setTokens = useSetAtom(tokensAtom);
   const land = useLand(hold);
+  const send = useSend();
   const parsed = parseBlock(splitLines(text), specs, true);
   const attenuate = useMutation({
     mutationFn: (lines: string[]) => api.attenuateToken({ specs, token: token.token, publicKey: token.publicKey, lines }),
     onSuccess: (made, lines) => {
-      const id = newId();
       // A new token beside the original: the starting token still works as it did.
-      setTokens((all) => [...all, { ...token, id, name: `${token.name}, narrowed`.slice(0, 80), parentId: token.id, how: "attenuated", blocks: [...token.blocks, lines], token: made.token, preset: false }]);
+      const narrowed: Token = { ...token, id: newId(), name: `${token.name}, narrowed`.slice(0, 80), parentId: token.id, how: "attenuated", blocks: [...token.blocks, lines], token: made.token, preset: false };
+      setTokens((all) => [...all, narrowed]);
+      if (retry) send.mutate({ text: retry.text, request: retry.request ?? undefined, token: narrowed });
       onClose();
-      land(id);
+      land(narrowed.id);
     },
     onError: fail,
   });
-  const first = specs[0]!;
-  const withParam = first.actions.find((a) => a.params.length);
-  const example = withParam ? parse(templatesFor(withParam)[1]!, first) : null;
-  // One "Only on…" per app when there is a choice to make, then a deadline and one restriction on a value.
-  const examples = [...(specs.length > 1 ? specs.map((a) => `Only on ${a.name}`) : []), "Only before 2027-01-01", example?.ok && qualify(example.line, specs)].filter((s): s is string => !!s);
+  const examples = restrictionsFor(token, specs, retry?.request);
   return (
     <Modal
       onClose={onClose}
-      title="Attenuate into a new token"
-      description={`Anyone holding “${token.name}” can do this without your key. The result can only do less, and the original is unchanged.`}
+      title="Narrow this token (attenuate)"
+      description={`A weaker copy of “${token.name}”. The original keeps working.`}
       initialFocus={field}
       wide
     >
@@ -489,25 +515,29 @@ function Attenuate({ token, hold, onClose }: { token: Token; hold?: boolean; onC
           if (parsed.ok && !attenuate.isPending) attenuate.mutate(parsed.lines.map((l) => l.text));
         }}
       >
-        <LinesField ref={field} label="Restrictions to add, one per row" name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder={examples.join("\n")} />
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[0.9rem] text-muted">Add one:</span>
-          {examples.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setText((t) => (t.trim() ? `${t.trimEnd()}\n${s}` : s))}
-              className="min-h-9 cursor-pointer rounded-lg bg-well px-2.5 py-1 text-left font-serif ring-1 ring-line ring-inset hover:bg-accent-soft hover:text-accent"
-            >
-              {s}
-            </button>
-          ))}
+        {/* Pressing one is the way in; the field below is for anyone who would rather write the line. */}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Limits to add">
+          {examples.map((s) => {
+            const on = splitLines(text).includes(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setText((t) => (on ? splitLines(t).filter((l) => l !== s).join("\n") : t.trim() ? `${t.trimEnd()}\n${s}` : s))}
+                className="min-h-9 cursor-pointer rounded-lg bg-well px-2.5 py-1 text-left font-serif ring-1 ring-line ring-inset hover:bg-accent-soft hover:text-accent aria-pressed:bg-accent-soft aria-pressed:text-accent aria-pressed:ring-accent"
+              >
+                {s}
+              </button>
+            );
+          })}
         </div>
+        <LinesField ref={field} label="Limits to add, one per row" rows={3} name="lines" value={text} onChange={(e) => setText(e.currentTarget.value)} />
         <LineErrors text={text} parsed={parsed} />
         <Footer>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={!parsed.ok || attenuate.isPending}>
-            {attenuate.isPending ? "Attenuating…" : "Attenuate"}
+            {attenuate.isPending ? "Attenuating…" : retry ? "Attenuate and try again" : "Attenuate"}
           </Button>
         </Footer>
       </form>
@@ -524,16 +554,18 @@ const tabClass = "min-h-10 cursor-pointer border-b-2 border-transparent px-3 fon
  * is always a new token; whether a service accepts it depends on who signed it and whether it still says what
  * its sentences say. Without a starting token, this is a place to paste one in.
  */
-function EditToken({ token, hold, onClose }: { token?: Token; hold?: boolean; onClose: () => void }) {
+function EditToken({ token, hold, retry, onClose }: { token?: Token; hold?: boolean; retry?: Turn; onClose: () => void }) {
   const { apps, key } = useWorld();
   const setTokens = useSetAtom(tokensAtom);
   const land = useLand(hold);
+  const send = useSend();
   const specs = token ? apps.filter((a) => token.appIds.includes(a.id)) : apps;
   const first = token && !token.raw ? parseBlock(token.blocks[0] ?? [], specs, false) : null;
   const [code, setCode] = useState(token?.raw ?? (first?.ok ? blockCode(first.lines) : ""));
   const [raw, setRaw] = useState(token?.token ?? "");
   const add = (made: Token) => {
     setTokens((all) => [...all, made]);
+    if (retry) send.mutate({ text: retry.text, request: retry.request ?? undefined, token: made });
     onClose();
     land(made.id);
   };
@@ -575,7 +607,6 @@ function EditToken({ token, hold, onClose }: { token?: Token; hold?: boolean; on
         wrap="soft"
         className="break-all"
         label="The token's text"
-        hint="This is the whole signed token. Change any character and its signature stops matching."
         name="raw"
         value={raw}
         onChange={(e) => setRaw(e.currentTarget.value)}
@@ -592,7 +623,7 @@ function EditToken({ token, hold, onClose }: { token?: Token; hold?: boolean; on
 
   if (!token) {
     return (
-      <Modal onClose={onClose} title="Paste a token" description="It is checked against your key. If it doesn't verify, you can still hand it to the agent and watch it be refused." wide>
+      <Modal onClose={onClose} title="Paste a token" wide>
         {rawForm}
       </Modal>
     );
@@ -600,8 +631,8 @@ function EditToken({ token, hold, onClose }: { token?: Token; hold?: boolean; on
   return (
     <Modal
       onClose={onClose}
-      title="Edit this token by hand"
-      description={`This is what tampering looks like. You get a new token; “${token.name}” is left as it was.${token.blocks.length > 1 ? " Its attenuations aren't carried over." : ""}`}
+      title="Tamper with this token"
+      description={`An edited copy of “${token.name}”. The original keeps working.${token.blocks.length > 1 ? " Its attenuations aren't carried over." : ""}`}
       wide
     >
       <Tabs.Root defaultValue="datalog" className="flex flex-col gap-3">
@@ -625,15 +656,11 @@ function EditToken({ token, hold, onClose }: { token?: Token; hold?: boolean; on
               code
               rows={10}
               label="What the token says"
-              hint="Each sentence is followed by the Datalog it compiled to. Try raising a limit, or adding a right with no sentence."
+              hint="Try raising a limit."
               name="code"
               value={code}
               onChange={(e) => setCode(e.currentTarget.value)}
             />
-            <p className="text-[0.9rem] text-muted">
-              Saved without re-signing, it carries a signature that isn't yours, as a forger's would. Re-signed, the signature is yours again, but a service still compares each
-              sentence with its Datalog.
-            </p>
             <Footer>
               <Button onClick={onClose}>Cancel</Button>
               <Button disabled={!code.trim() || busy} onClick={() => forge.mutate(false)}>
